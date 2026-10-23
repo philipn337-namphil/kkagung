@@ -65,7 +65,10 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  // 운세를 열면 추천 행도 함께 생기므로 둘 다 지운다.
+  // 운세를 열면 추천 행과 새로고침권·재고 행도 함께 생기므로 이 테스트가 쓴 날짜 분을 지운다.
+  const testedDates = [new Date(`${"2026-10-26"}T00:00:00Z`), new Date(`${"2026-10-27"}T00:00:00Z`)];
+  await db.refreshToken.deleteMany({ where: { userId: { in: Object.values(ids) }, tokenDate: { in: testedDates } } });
+  await db.dailyRefreshInventory.deleteMany({ where: { serviceDate: { in: testedDates } } });
   await db.recommendationItem.deleteMany({ where: { viewerId: { in: Object.values(ids) }, id: { notIn: preexistingItemIds } } });
   await db.dailyFortune.deleteMany({ where: { userId: { in: Object.values(ids) }, id: { notIn: preexistingFortuneIds } } });
   if (server) {
