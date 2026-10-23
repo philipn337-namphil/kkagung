@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { requireAuth } from "../middleware/auth.js";
+import { ensureDailyCards } from "../lib/recommendation.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
 
@@ -82,7 +83,8 @@ dailyRouter.post("/open", async (req, res, next) => {
     }
 
     const token = await prisma.refreshToken.findUnique({ where: { userId_tokenDate: { userId, tokenDate: fortuneDate } } });
-    return ok(res, { serviceDate, fortune: fortuneView(fortune), refreshTicket: ticketView(token, now), cards: [], firstOpen });
+    const { cards } = await ensureDailyCards(userId, serviceDate, fortune.cardCount);
+    return ok(res, { serviceDate, fortune: fortuneView(fortune), refreshTicket: ticketView(token, now), cards, firstOpen });
   } catch (error) { next(error); }
 });
 
