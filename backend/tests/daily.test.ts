@@ -17,6 +17,7 @@ let db: Awaited<ReturnType<typeof loadPrisma>>;
 let jwtSecret = "";
 let ids: Record<string, bigint> = {};
 let preexistingFortuneIds: bigint[] = [];
+let preexistingItemIds: bigint[] = [];
 
 const loadPrisma = async () => (await import("../src/prisma.js")).prisma;
 
@@ -46,6 +47,7 @@ beforeAll(async () => {
   expect(Object.keys(ids)).toHaveLength(SEED_EMAILS.length);
 
   preexistingFortuneIds = (await db.dailyFortune.findMany({ select: { id: true } })).map((row) => row.id);
+  preexistingItemIds = (await db.recommendationItem.findMany({ select: { id: true } })).map((row) => row.id);
 
   baseUrl = await new Promise<string>((resolve, reject) => {
     const started = app.listen(0, () => {
@@ -63,6 +65,8 @@ afterEach(() => {
 });
 
 afterAll(async () => {
+  // 운세를 열면 추천 행도 함께 생기므로 둘 다 지운다.
+  await db.recommendationItem.deleteMany({ where: { viewerId: { in: Object.values(ids) }, id: { notIn: preexistingItemIds } } });
   await db.dailyFortune.deleteMany({ where: { userId: { in: Object.values(ids) }, id: { notIn: preexistingFortuneIds } } });
   if (server) {
     const closing = server;
