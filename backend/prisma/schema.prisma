@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  RECOMMENDATION_BLOCKED
+  CHAT_RESTRICTED
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum JobCategory {
+  STUDENT
+  OFFICE_WORKER
+  FREELANCER
+  SELF_EMPLOYED
+  OTHER
+}
+
+enum EnergyType {
+  EGEN
+  TETO
+  ANY
+}
+
+enum SmokingStatus {
+  SMOKER
+  NON_SMOKER
+  ANY
+}
+
+enum TattooStatus {
+  YES
+  NO
+  ANY
+}
+
+enum MilitaryService {
+  COMPLETED
+  NOT_COMPLETED
+  NOT_APPLICABLE
+  ANY
+}
+
+model User {
+  id              BigInt       @id @default(autoincrement())
+  email           String       @unique @db.VarChar(255)
+  passwordHash    String       @map("password_hash") @db.VarChar(255)
+  role            UserRole     @default(USER)
+  status          UserStatus   @default(ACTIVE)
+  adultVerifiedAt DateTime?    @map("adult_verified_at")
+  lastActiveAt    DateTime     @default(now()) @map("last_active_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  profile         UserProfile?
+  preference      UserPreference?
+  @@map("users")
+  @@index([status, lastActiveAt])
+}
+
+model UserProfile {
+  userId              BigInt          @id @map("user_id")
+  displayName         String          @map("display_name") @db.VarChar(30)
+  birthDate           DateTime        @map("birth_date") @db.Date
+  gender              Gender
+  regionCode          String          @map("region_code") @db.VarChar(50)
+  heightCm            Int             @map("height_cm") @db.SmallInt
+  jobCategory         JobCategory     @map("job_category")
+  mbti                String          @db.Char(4)
+  energyType          EnergyType?     @map("energy_type")
+  animalFace          String?         @map("animal_face") @db.VarChar(30)
+  celebrityLookalike  String?         @map("celebrity_lookalike") @db.VarChar(50)
+  smokingStatus       SmokingStatus?  @map("smoking_status")
+  tattooStatus        TattooStatus?   @map("tattoo_status")
+  militaryService     MilitaryService? @map("military_service")
+  intro               String?         @db.VarChar(200)
+  profileCompletedAt  DateTime?       @map("profile_completed_at")
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_profiles")
+  @@index([gender, regionCode, birthDate])
+}
+
+model UserPreference {
+  userId          BigInt          @id @map("user_id")
+  preferredGender Gender          @map("preferred_gender")
+  minAge          Int             @map("min_age") @db.SmallInt
+  maxAge          Int             @map("max_age") @db.SmallInt
+  regionScope     Json            @map("region_scope")
+  energyType      EnergyType      @default(ANY) @map("energy_type")
+  animalFace      String?         @map("animal_face") @db.VarChar(30)
+  minHeightCm     Int?            @map("min_height_cm") @db.SmallInt
+  smokingStatus   SmokingStatus   @default(ANY) @map("smoking_status")
+  tattooStatus    TattooStatus    @default(ANY) @map("tattoo_status")
+  militaryService MilitaryService @default(ANY) @map("military_service")
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_preferences")
+}
