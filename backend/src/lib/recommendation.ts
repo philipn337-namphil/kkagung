@@ -203,34 +203,33 @@ export const readDailyCards = async (viewerId: bigint, serviceDate: string) => {
   return { sourceType: refreshed.length > 0 ? "REFRESH" : "INITIAL", cards: await toCards(viewerId, serviceDate, bundle) };
 };
 
-/** 새로고침권을 쓴 뒤 호출한다. 같은 날 이미 추천된 상대는 빼고 새 묶음을 저장한다. */
-export const addRefreshCards = async (viewerId: bigint, serviceDate: string, cardCount: number) => {
-  const recommendationDate = fortuneDateOf(serviceDate);
-  const alreadyRefreshed = await prisma.recommendationItem.count({ where: { viewerId, recommendationDate, sourceType: "REFRESH" } });
+/** 새로고침으로 보여줄 새 후보를 고른다. 저장도, 권 소비도 하지 않는다. */
+export const previewRefreshTargets = (viewerId: bigint, serviceDate: string, cardCount: number) =>
+  pickTargets(viewerId, serviceDate, fortuneDateOf(serviceDate), cardCount);
 
-  if (alreadyRefreshed === 0) {
-    const picked = await pickTargets(viewerId, serviceDate, recommendationDate, cardCount);
-    if (picked.length > 0) {
-      const highest = await prisma.recommendationItem.aggregate({ where: { viewerId, recommendationDate }, _max: { displayOrder: true } });
-      const baseOrder = highest._max.displayOrder ?? 0;
-      try {
-        await prisma.recommendationItem.createMany({
-          data: picked.map((entry, index) => ({
-            viewerId,
-            targetUserId: entry.id,
-            recommendationDate,
-            sourceType: "REFRESH" as const,
-            displayOrder: baseOrder + index + 1,
-            reasonCode: entry.reasonCode,
-          })),
-        });
-      } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
-      }
+/** 고른 후보를 REFRESH 묶음으로 저장하고 그 묶음만 돌려준다. */
+export const saveRefreshCards = async (viewerId: bigint, serviceDate: string, picked: { id: bigint; reasonCode: string }[]) => {
+  const recommendationDate = fortuneDateOf(serviceDate);
+  if (picked.length > 0) {
+    const highest = await prisma.recommendationItem.aggregate({ where: { viewerId, recommendationDate }, _max: { displayOrder: true } });
+    const baseOrder = highest._max.displayOrder ?? 0;
+    try {
+      await prisma.recommendationItem.createMany({
+        data: picked.map((entry, index) => ({
+          viewerId,
+          targetUserId: entry.id,
+          recommendationDate,
+          sourceType: "REFRESH" as const,
+          displayOrder: baseOrder + index + 1,
+          reasonCode: entry.reasonCode,
+        })),
+      });
+    } catch (error) {
+      // 같은 순간의 다른 요청이 먼저 저장했다면 유니크 충돌이 난다. 그 결과를 그대로 쓴다.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
     }
   }
 
-  // 새로고침 응답은 새 묶음만 돌려준다. 새 후보가 없으면 빈 목록이다(오류가 아니다).
   const refreshed = await prisma.recommendationItem.findMany({
     where: { viewerId, recommendationDate, sourceType: "REFRESH" },
     orderBy: { displayOrder: "asc" },
