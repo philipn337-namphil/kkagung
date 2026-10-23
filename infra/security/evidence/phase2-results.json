@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "ebc48552c7d6e53eb7902da6c3cce83cb0f4a97f",
-  "recordedAt": "2026-10-23T08:13:51.136Z",
+  "baselineCommit": "7ace6274a0138a9f2d9f719e27f3ea322ad4fa50",
+  "recordedAt": "2026-10-23T08:59:17.072Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "build": {
@@ -9,11 +9,31 @@
   },
   "tests": {
     "exitCode": 1,
-    "passed": 6,
-    "failed": 12,
+    "passed": 7,
+    "failed": 16,
     "pending": 7,
-    "total": 25,
+    "total": 30,
     "cases": [
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /server.js must not be served",
+        "status": "failed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /.env.example must not be served",
+        "status": "failed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output",
+        "status": "failed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) empty production JWT signing key must fail on startup",
+        "status": "failed"
+      },
       {
         "name": "existing authentication and profile routes (mock DB) missing token returns 401",
         "status": "passed"
