@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { config } from "./config.js";
 import { fail, ok } from "./lib/response.js";
 import { authRouter } from "./routes/auth.js";
+import { dailyRouter } from "./routes/daily.js";
 import { devRouter } from "./routes/dev.js";
 import { meRouter } from "./routes/me.js";
 import { prisma } from "./prisma.js";
@@ -16,6 +17,7 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", async (_req, res, next) => { try { await prisma.$queryRaw`SELECT 1`; return ok(res, { status: "ok", database: "connected" }); } catch (e) { next(e); } });
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/me", meRouter);
+app.use("/api/v1/daily", dailyRouter);
 // 개발·시연 전용. 꺼져 있거나 운영 환경이면 등록하지 않아 아래 404 처리가 그대로 응답한다.
 if (process.env.ENABLE_TEST_ACCOUNTS === "true" && process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production") app.use("/api/v1/dev", devRouter);
 app.use((_req, res) => fail(res, 404, "RESOURCE_NOT_FOUND", "요청한 경로가 없습니다."));
