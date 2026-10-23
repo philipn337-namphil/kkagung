@@ -1,0 +1,26 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and builds
+node_modules/
+dist/
+build/
+coverage/
+
+# Logs and runtime files
+*.log
+logs/
+uploads/
+storage/private/
+*.sql
+*.dump
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
