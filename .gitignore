@@ -1,26 +1,55 @@
-# Environment and secrets
+# Local environment files (keep distributable examples)
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Original photos: store only in private object storage, never in Git
+originals/
+original-images/
+uploads/original/
+uploads/originals/
+storage/private/
+
+# DB exports and backup artifacts (SQL migrations remain trackable)
+dumps/
+db-dumps/
+backups/
+*.dump
+*.sql.gz
+*.sql.zip
+*.sql.bz2
+*.bak
+dump*.sql
+*-dump.sql
+*_dump.sql
+
+# Credentials / private keys / certificate bundles
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+credentials.json
+service-account*.json
+.aws/
 
-# Dependencies and builds
+# Runtime files
+logs/
+*.log
+.DS_Store
+Thumbs.db
+
+# Existing project dependency/build rules
 node_modules/
 dist/
 build/
 coverage/
-
-# Logs and runtime files
-*.log
-logs/
-uploads/
-storage/private/
-*.sql
-*.dump
-
-# IDE and OS files
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db
+uploads/
