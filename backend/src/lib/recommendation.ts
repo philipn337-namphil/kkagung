@@ -190,15 +190,53 @@ const toCards = async (viewerId: bigint, serviceDate: string, items: { targetUse
   return cards;
 };
 
+// 새로고침을 썼다면 새로고침된 묶음만 돌려준다. 아직 안 썼다면 기본 묶음이다.
 export const readDailyCards = async (viewerId: bigint, serviceDate: string) => {
-  const recommendationDate = new Date(`${serviceDate}T00:00:00Z`);
+  const recommendationDate = fortuneDateOf(serviceDate);
   const items = await prisma.recommendationItem.findMany({
     where: { viewerId, recommendationDate },
     orderBy: { displayOrder: "asc" },
     select: { targetUserId: true, reasonCode: true, sourceType: true },
   });
-  const sourceType = items.some((item) => item.sourceType === "REFRESH") ? "REFRESH" : "INITIAL";
-  return { sourceType, cards: await toCards(viewerId, serviceDate, items) };
+  const refreshed = items.filter((item) => item.sourceType === "REFRESH");
+  const bundle = refreshed.length > 0 ? refreshed : items;
+  return { sourceType: refreshed.length > 0 ? "REFRESH" : "INITIAL", cards: await toCards(viewerId, serviceDate, bundle) };
+};
+
+/** 새로고침권을 쓴 뒤 호출한다. 같은 날 이미 추천된 상대는 빼고 새 묶음을 저장한다. */
+export const addRefreshCards = async (viewerId: bigint, serviceDate: string, cardCount: number) => {
+  const recommendationDate = fortuneDateOf(serviceDate);
+  const alreadyRefreshed = await prisma.recommendationItem.count({ where: { viewerId, recommendationDate, sourceType: "REFRESH" } });
+
+  if (alreadyRefreshed === 0) {
+    const picked = await pickTargets(viewerId, serviceDate, recommendationDate, cardCount);
+    if (picked.length > 0) {
+      const highest = await prisma.recommendationItem.aggregate({ where: { viewerId, recommendationDate }, _max: { displayOrder: true } });
+      const baseOrder = highest._max.displayOrder ?? 0;
+      try {
+        await prisma.recommendationItem.createMany({
+          data: picked.map((entry, index) => ({
+            viewerId,
+            targetUserId: entry.id,
+            recommendationDate,
+            sourceType: "REFRESH" as const,
+            displayOrder: baseOrder + index + 1,
+            reasonCode: entry.reasonCode,
+          })),
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+      }
+    }
+  }
+
+  // 새로고침 응답은 새 묶음만 돌려준다. 새 후보가 없으면 빈 목록이다(오류가 아니다).
+  const refreshed = await prisma.recommendationItem.findMany({
+    where: { viewerId, recommendationDate, sourceType: "REFRESH" },
+    orderBy: { displayOrder: "asc" },
+    select: { targetUserId: true, reasonCode: true },
+  });
+  return { sourceType: "REFRESH", cards: await toCards(viewerId, serviceDate, refreshed) };
 };
 
 export const ensureDailyCards = async (viewerId: bigint, serviceDate: string, cardCount: number) => {
