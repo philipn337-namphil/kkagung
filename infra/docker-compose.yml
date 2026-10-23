@@ -29,7 +29,7 @@ services:
     environment:
       APP_PORT: 8080
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      JWT_SECRET: ${JWT_SECRET:-change_me_to_a_long_random_value}
+      JWT_SECRET: ${JWT_SECRET:-local_development_secret_change_before_production}
       DATABASE_URL: mysql://${DB_USER:-kkagung_app}:${DB_PASSWORD:-change_me}@mysql:3306/${DB_NAME:-kkagung}
     ports:
       - "8080:8080"
