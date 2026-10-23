@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
+// 서비스 하루는 한국 시간 오전 8시부터다. 8시 이전 요청은 전날 서비스 날짜에 속한다.
+const KST_OFFSET_HOURS = 9;
+const SERVICE_DAY_START_HOUR = 8;
+export const serviceDateOf = (now: Date) =>
+  new Date(now.getTime() + (KST_OFFSET_HOURS - SERVICE_DAY_START_HOUR) * 60 * 60 * 1000).toISOString().slice(0, 10);
+export const fortuneDateOf = (serviceDate: string) => new Date(`${serviceDate}T00:00:00Z`);
+
 // 추천 목록에서는 정지·탈퇴 외에 추천 제외 제재도 빼야 하므로 남는 상태는 이 둘이다.
 const RECOMMENDABLE_STATUS = ["ACTIVE", "CHAT_RESTRICTED"] as const;
 const ANY = "ANY";

@@ -2,16 +2,9 @@ import { Router } from "express";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { requireAuth } from "../middleware/auth.js";
-import { ensureDailyCards } from "../lib/recommendation.js";
+import { ensureDailyCards, fortuneDateOf, serviceDateOf } from "../lib/recommendation.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
-
-// 서비스 하루는 한국 시간 오전 8시부터다. 8시 이전 요청은 전날 서비스 날짜에 속한다.
-const KST_OFFSET_HOURS = 9;
-const SERVICE_DAY_START_HOUR = 8;
-const serviceDateOf = (now: Date) =>
-  new Date(now.getTime() + (KST_OFFSET_HOURS - SERVICE_DAY_START_HOUR) * 60 * 60 * 1000).toISOString().slice(0, 10);
-const fortuneDateOf = (serviceDate: string) => new Date(`${serviceDate}T00:00:00Z`);
 
 // 등급·점수 산정 규칙은 문서에 없다. 같은 사용자·같은 서비스 날짜면 항상 같은 결과가 나오도록
 // 사용자 id 와 서비스 날짜를 해시해 0~100 점수를 만들고, 점수 구간으로 등급과 카드 수를 정한다.
