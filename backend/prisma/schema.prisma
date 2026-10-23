@@ -72,6 +72,24 @@ enum GenerationStatus {
   FAILED
 }
 
+enum FortuneGrade {
+  BAD
+  NORMAL
+  GOOD
+  GREAT
+}
+
+enum RecommendationSource {
+  INITIAL
+  REFRESH
+}
+
+enum RefreshTokenStatus {
+  AVAILABLE
+  USED
+  EXPIRED
+}
+
 model User {
   id              BigInt       @id @default(autoincrement())
   email           String       @unique @db.VarChar(255)
@@ -85,6 +103,12 @@ model User {
   profile         UserProfile?
   preference      UserPreference?
   profileImages   ProfileImage[]
+  dailyFortunes   DailyFortune[]
+  recommendationsSeen RecommendationItem[] @relation("RecommendationViewer")
+  recommendedToOthers RecommendationItem[] @relation("RecommendationTarget")
+  refreshTokens   RefreshToken[]
+  blocksMade      Block[]         @relation("BlockBlocker")
+  blocksReceived  Block[]         @relation("BlockTarget")
   @@map("users")
   @@index([status, lastActiveAt])
 }
@@ -145,4 +169,78 @@ model ProfileImage {
   @@map("profile_images")
   @@unique([userId, slot, imageType])
   @@index([userId, imageType, generationStatus])
+}
+
+model DailyFortune {
+  id            BigInt        @id @default(autoincrement())
+  userId        BigInt        @map("user_id")
+  fortuneDate   DateTime      @map("fortune_date") @db.Date
+  grade         FortuneGrade
+  score         Int           @db.UnsignedTinyInt
+  cardCount     Int           @map("card_count") @db.TinyInt
+  message       String        @db.VarChar(200)
+  openedAt      DateTime?     @map("opened_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("daily_fortunes")
+  @@unique([userId, fortuneDate])
+}
+
+model RecommendationItem {
+  id                 BigInt                @id @default(autoincrement())
+  viewerId           BigInt                @map("viewer_id")
+  targetUserId       BigInt                @map("target_user_id")
+  recommendationDate DateTime              @map("recommendation_date") @db.Date
+  sourceType         RecommendationSource  @map("source_type")
+  displayOrder       Int                   @map("display_order") @db.TinyInt
+  reasonCode         String                @map("reason_code") @db.VarChar(40)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  viewer             User                  @relation("RecommendationViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  target             User                  @relation("RecommendationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  @@map("recommendation_items")
+  @@unique([viewerId, targetUserId, recommendationDate])
+  @@index([viewerId, recommendationDate, sourceType])
+}
+
+model DailyRefreshInventory {
+  serviceDate         DateTime        @id @map("service_date") @db.Date
+  totalCount          Int             @map("total_count")
+  remainingCount      Int             @map("remaining_count")
+  grantedCount        Int             @default(0) @map("granted_count")
+  configuredByAdminId BigInt?         @map("configured_by_admin_id")
+  configuredAt        DateTime?       @map("configured_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  refreshTokens       RefreshToken[]
+  @@map("daily_refresh_inventory")
+}
+
+model RefreshToken {
+  id          BigInt                 @id @default(autoincrement())
+  userId      BigInt                 @map("user_id")
+  tokenDate   DateTime               @map("token_date") @db.Date
+  status      RefreshTokenStatus     @default(AVAILABLE)
+  expiresAt   DateTime               @map("expires_at")
+  usedAt      DateTime?              @map("used_at")
+  grantedRank Int?                   @map("granted_rank")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory   DailyRefreshInventory  @relation(fields: [tokenDate], references: [serviceDate], onDelete: Cascade)
+  @@map("refresh_tokens")
+  @@unique([userId, tokenDate])
+  @@index([tokenDate, grantedRank])
+}
+
+model Block {
+  id           BigInt   @id @default(autoincrement())
+  blockerId    BigInt   @map("blocker_id")
+  targetUserId BigInt   @map("target_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  blocker      User     @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  target       User     @relation("BlockTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  @@map("blocks")
+  @@unique([blockerId, targetUserId])
+  @@index([targetUserId, blockerId])
 }

@@ -73,6 +73,11 @@ erDiagram
 | `user_profiles` | 있음 | |
 | `user_preferences` | 있음 | |
 | `profile_images` | **구현됨(Phase 2)** | `2026102302_add_profile_images` 마이그레이션으로 생성한다. |
+| `daily_fortunes` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. |
+| `recommendation_items` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. |
+| `daily_refresh_inventory` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 날짜 PK 컬럼 이름은 공통 규칙에 따라 `service_date`다. |
+| `refresh_tokens` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. `token_date`가 `daily_refresh_inventory.service_date`를 참조한다. |
+| `blocks` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 추천 목록의 양방향 차단 필터에 필요해 함께 만들었다. `reports`는 아직 미구현이다. |
 
 아래 나머지 테이블도 모두 미구현 상태이며 Phase 2 마이그레이션에서 생성한다.
 
