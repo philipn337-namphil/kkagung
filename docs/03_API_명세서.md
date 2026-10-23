@@ -606,9 +606,10 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 오류: `UNAUTHORIZED` 401, `PROFILE_INCOMPLETE` 409, `REFRESH_TOKEN_NOT_FOUND` 404, `REFRESH_TOKEN_EXPIRED` 409, `REFRESH_TOKEN_ALREADY_USED` 409, `TOO_MANY_REQUESTS` 429
 - 특별 규칙:
   - 기본 묶음에 이미 나왔던 상대는 제외한 새 카드를 반환한다.
-  - 네트워크 재시도로 같은 요청이 두 번 도착해도 **한 번만 사용 처리**한다. 두 번째 호출은 이미 생성된 새로고침 묶음을 그대로 반환하며 새 묶음을 또 만들지 않는다.
+  - 새로 보여줄 후보가 한 명도 없으면 권을 쓰지 않는다. `200`과 빈 `cards`를 반환하고 `refreshTicket`은 `AVAILABLE` 상태로 남는다.
+  - 권은 **한 번만** 소비된다. 동시에 여러 번 호출해도 한 요청만 성공하고, 나머지와 이후의 재호출은 `REFRESH_TOKEN_ALREADY_USED`(409)로 거절된다. 이미 만든 새로고침 묶음은 `GET /recommendations/today`로 다시 읽는다.
   - 새로고침권은 다음 날 오전 8시(KST)에 만료된다.
-- 반복 호출: 멱등. 위 규칙에 따라 결과가 같다.
+- 반복 호출: 비멱등. 성공은 한 번뿐이고 두 번째부터는 `REFRESH_TOKEN_ALREADY_USED`다. 단 후보가 없어 권을 쓰지 않은 호출은 몇 번이든 같은 빈 응답을 준다.
 
 ### GET `/cards/{targetUserId}` 🔜
 

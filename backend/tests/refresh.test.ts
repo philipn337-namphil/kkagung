@@ -138,8 +138,18 @@ describe("POST /api/v1/recommendations/refresh", () => {
   it("동시에 3번 눌러도 한 번만 성공한다", async () => {
     await setStock(5);
     freeze();
-    const token = tokenFor(ids["demo@kkagung.local"]);
+    const viewerId = ids["demo@kkagung.local"];
+    const token = tokenFor(viewerId);
     await call("/api/v1/daily/open", { method: "POST", token });
+
+    // 권을 쓰려면 보여줄 새 후보가 있어야 한다. 시드 후보가 적으므로 기본 묶음 일부를 비워 자리를 만든다.
+    const initial = await db.recommendationItem.findMany({
+      where: { viewerId, recommendationDate: SERVICE_DATE },
+      orderBy: { displayOrder: "asc" },
+      select: { id: true },
+    });
+    expect(initial.length).toBeGreaterThan(1);
+    await db.recommendationItem.deleteMany({ where: { id: { in: initial.slice(1).map((row) => row.id) } } });
 
     const results = await Promise.all(Array.from({ length: 3 }, () => call("/api/v1/recommendations/refresh", { method: "POST", token })));
 
@@ -165,6 +175,36 @@ describe("POST /api/v1/recommendations/refresh", () => {
 
     expect(refreshed.status).toBe(404);
     expect(refreshed.body.error.code).toBe("REFRESH_TOKEN_NOT_FOUND");
+  });
+
+  it("보여줄 새 후보가 없으면 빈 묶음을 주고 권을 쓰지 않는다", async () => {
+    await setStock(5);
+    freeze();
+    const userId = ids["demo@kkagung.local"];
+    const token = tokenFor(userId);
+    await call("/api/v1/daily/open", { method: "POST", token });
+
+    // 기본 묶음이 이미 모든 후보를 쓴 상태로 만든다.
+    const candidates = await db.user.count({
+      where: { id: { not: userId }, status: { in: ["ACTIVE", "CHAT_RESTRICTED"] }, profile: { isNot: null }, preference: { isNot: null } },
+    });
+    expect(candidates).toBeGreaterThan(0);
+
+    let refreshed = await call("/api/v1/recommendations/refresh", { method: "POST", token });
+    // 후보가 남아 있으면 소진될 때까지 새로고침권을 다시 채워가며 비운다.
+    while (refreshed.status === 200 && refreshed.body.data.cards.length > 0) {
+      await db.refreshToken.updateMany({ where: { userId, tokenDate: SERVICE_DATE }, data: { status: "AVAILABLE", usedAt: null } });
+      refreshed = await call("/api/v1/recommendations/refresh", { method: "POST", token });
+    }
+
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.data.cards).toEqual([]);
+    expect(refreshed.body.data.refreshTicket.status).toBe("AVAILABLE");
+    expect(refreshed.body.data.refreshTicket.usedAt).toBeNull();
+
+    const ticket = await db.refreshToken.findUniqueOrThrow({ where: { userId_tokenDate: { userId, tokenDate: SERVICE_DATE } } });
+    expect(ticket.status).toBe("AVAILABLE");
+    expect(ticket.usedAt).toBeNull();
   });
 
   it("새 묶음은 기본 묶음과 겹치지 않고 금지 필드가 없다", async () => {
