@@ -77,6 +77,11 @@ afterEach(async () => {
 
 afterAll(async () => {
   const seedIds = Object.values(ids);
+  // 운세를 열면 추천 행과 새로고침권·재고 행도 함께 생긴다. 다른 테스트 파일의 순서나
+  // 외래키 CASCADE 에 기대지 않고, 이 테스트가 쓴 서비스 날짜 분을 직접 지운다.
+  if (createdBlockIds.length > 0) await db.block.deleteMany({ where: { id: { in: createdBlockIds.splice(0) } } });
+  await db.refreshToken.deleteMany({ where: { userId: { in: seedIds }, tokenDate: SERVICE_DATE } });
+  await db.dailyRefreshInventory.deleteMany({ where: { serviceDate: SERVICE_DATE } });
   await db.recommendationItem.deleteMany({ where: { viewerId: { in: seedIds }, id: { notIn: keptItemIds } } });
   await db.dailyFortune.deleteMany({ where: { userId: { in: seedIds }, id: { notIn: keptFortuneIds } } });
   if (server) {
