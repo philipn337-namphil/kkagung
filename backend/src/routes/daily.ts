@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { requireAuth } from "../middleware/auth.js";
 import { ensureDailyCards, fortuneDateOf, serviceDateOf } from "../lib/recommendation.js";
+import { grantRefreshTicket, readRefreshTicket } from "../lib/refreshTicket.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
 
@@ -29,11 +30,10 @@ const fortuneView = (fortune: { grade: string; score: number; cardCount: number;
   openedAt: fortune.openedAt,
 });
 
-// 새로고침권 지급(선착순 재고 차감)은 새로고침권 API 가 담당한다. 여기서는 현재 상태만 읽는다.
-const ticketView = (token: { status: string; expiresAt: Date } | null, now: Date) => {
+const ticketView = (token: { status: string; expiresAt: Date } | null, now: Date, granted = false) => {
   if (token === null) return { status: "NOT_GRANTED", granted: false, expiresAt: null };
   const status = token.status === "AVAILABLE" && token.expiresAt.getTime() <= now.getTime() ? "EXPIRED" : token.status;
-  return { status, granted: false, expiresAt: token.expiresAt };
+  return { status, granted, expiresAt: token.expiresAt };
 };
 
 const loadAccount = (userId: bigint) =>
@@ -75,9 +75,10 @@ dailyRouter.post("/open", async (req, res, next) => {
       firstOpen = true;
     }
 
-    const token = await prisma.refreshToken.findUnique({ where: { userId_tokenDate: { userId, tokenDate: fortuneDate } } });
+    // 선착순 지급은 최초 유효 호출에서만 시도한다. 이후 호출은 상태만 읽는다.
+    const ticket = firstOpen ? await grantRefreshTicket(userId, serviceDate) : { token: await readRefreshTicket(userId, serviceDate), granted: false };
     const { cards } = await ensureDailyCards(userId, serviceDate, fortune.cardCount);
-    return ok(res, { serviceDate, fortune: fortuneView(fortune), refreshTicket: ticketView(token, now), cards, firstOpen });
+    return ok(res, { serviceDate, fortune: fortuneView(fortune), refreshTicket: ticketView(ticket.token, now, ticket.granted), cards, firstOpen });
   } catch (error) { next(error); }
 });
 
@@ -95,7 +96,7 @@ dailyRouter.get("/", async (req, res, next) => {
     const fortune = await prisma.dailyFortune.findUnique({ where: { userId_fortuneDate: { userId, fortuneDate } } });
     if (fortune === null) return fail(res, 404, "RESOURCE_NOT_FOUND", "오늘 운세가 아직 없습니다.");
 
-    const token = await prisma.refreshToken.findUnique({ where: { userId_tokenDate: { userId, tokenDate: fortuneDate } } });
+    const token = await readRefreshTicket(userId, serviceDate);
     return ok(res, { serviceDate, fortune: fortuneView(fortune), refreshTicket: ticketView(token, now) });
   } catch (error) { next(error); }
 });
