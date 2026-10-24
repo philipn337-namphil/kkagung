@@ -86,7 +86,14 @@ const pickTargets = async (viewerId: bigint, serviceDate: string, recommendation
   const excluded = await excludedIds(viewerId, recommendationDate);
 
   const candidates = (await prisma.user.findMany({
-    where: { id: { not: viewerId }, status: { in: [...RECOMMENDABLE_STATUS] }, profile: { isNot: null }, preference: { isNot: null } },
+    where: {
+      id: { not: viewerId },
+      status: { in: [...RECOMMENDABLE_STATUS] },
+      profile: { isNot: null },
+      preference: { isNot: null },
+      // 공개할 이미지가 준비된 사람만 후보로 삼는다.
+      profileImages: { some: { imageType: { in: ["AI_PUBLIC", "BLURRED_PUBLIC"] }, generationStatus: "DONE" } },
+    },
     select: { id: true, profile: true, preference: true },
   })) as Candidate[];
 
@@ -140,12 +147,15 @@ const pickTargets = async (viewerId: bigint, serviceDate: string, recommendation
 };
 
 // 공개용 이미지만 쓴다. 원본(ORIGINAL_PRIVATE)은 조회하지도, 응답에 넣지도 않는다.
-const publicImageOf = (images: { imageType: string; objectKey: string }[]) => {
+// 확정 규칙: AI 변환이 끝났으면 AI, 아니면 서버 블러로 대체한다. 둘 다 없으면 카드에서 제외한다.
+const pickPublicImage = (images: { imageType: string; objectKey: string }[]) =>
+  images.find((image) => image.imageType === "AI_PUBLIC") ?? images.find((image) => image.imageType === "BLURRED_PUBLIC") ?? null;
+
+const publicImageUrl = (chosen: { imageType: string; objectKey: string }) => {
   const endpoint = (process.env.OBJECT_STORAGE_ENDPOINT ?? "").replace(/\/$/, "");
   const bucket = process.env.OBJECT_STORAGE_BUCKET_PUBLIC ?? "";
-  const chosen = images.find((image) => image.imageType === "AI_PUBLIC") ?? images.find((image) => image.imageType === "BLURRED_PUBLIC");
   // 기준 주소가 설정되지 않은 환경에서는 URL 을 만들 수 없으므로 null 을 준다.
-  if (!chosen || endpoint === "" || bucket === "") return null;
+  if (endpoint === "" || bucket === "") return null;
   return { url: `${endpoint}/${bucket}/${chosen.objectKey}`, type: chosen.imageType };
 };
 
@@ -177,6 +187,9 @@ export const buildPublicCards = async (viewerId: bigint, serviceDate: string, it
     // 카드를 만든 뒤 상태가 바뀐 상대는 응답 시점에 다시 걸러낸다.
     const target = byId.get(item.targetUserId.toString());
     if (!target?.profile || excluded.has(item.targetUserId.toString())) continue;
+    // 쓸 수 있는 공개 이미지가 없는 후보는 카드로 만들지 않는다.
+    const chosenImage = pickPublicImage(target.profileImages);
+    if (chosenImage === null) continue;
     cards.push({
       userId: target.id.toString(),
       displayName: target.profile.displayName,
@@ -188,7 +201,7 @@ export const buildPublicCards = async (viewerId: bigint, serviceDate: string, it
       mbti: target.profile.mbti,
       animalFace: target.profile.animalFace,
       badges: [],
-      publicImage: publicImageOf(target.profileImages),
+      publicImage: publicImageUrl(chosenImage),
       recommendReason: reasonText(item.reasonCode),
     });
   }

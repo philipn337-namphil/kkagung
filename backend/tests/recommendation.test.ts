@@ -188,6 +188,60 @@ describe("응답 필드", () => {
     }
   });
 
+  it("AI 가 없으면 블러로 대체하고, 쓸 이미지가 없거나 실패한 후보는 카드에서 제외한다", async () => {
+    freeze();
+    const previous = process.env.OBJECT_STORAGE_ENDPOINT;
+    process.env.OBJECT_STORAGE_ENDPOINT = "https://storage.example";
+    const viewerId = ids["demo@kkagung.local"];
+    const token = tokenFor(viewerId);
+
+    // 앞선 케이스가 저장한 묶음을 비우고 새로 뽑는다.
+    await db.recommendationItem.deleteMany({ where: { viewerId, recommendationDate: SERVICE_DATE } });
+    const baseline = await call("/api/v1/daily/open", { method: "POST", token });
+    const candidateIds = baseline.body.data.cards.map((card: { userId: string }) => card.userId) as string[];
+    expect(candidateIds.length).toBeGreaterThanOrEqual(3);
+    const [aiOnly, blurOnly, dropped] = candidateIds;
+
+    const touched = await db.profileImage.findMany({
+      where: { userId: { in: [aiOnly, blurOnly, dropped].map((id) => BigInt(id)) } },
+      select: { id: true, userId: true, imageType: true, generationStatus: true },
+    });
+
+    try {
+      // 두 번째 후보는 AI 를 치워 블러만 남기고, 세 번째 후보는 공개 이미지를 모두 실패로 만든다.
+      await db.profileImage.updateMany({
+        where: { userId: BigInt(blurOnly), imageType: "AI_PUBLIC" },
+        data: { generationStatus: "PENDING" },
+      });
+      await db.profileImage.updateMany({
+        where: { userId: BigInt(dropped), imageType: { in: ["AI_PUBLIC", "BLURRED_PUBLIC"] } },
+        data: { generationStatus: "FAILED" },
+      });
+      await db.recommendationItem.deleteMany({ where: { viewerId, recommendationDate: SERVICE_DATE } });
+
+      const reopened = await call("/api/v1/daily/open", { method: "POST", token });
+      const byUserId = new Map(reopened.body.data.cards.map((card: { userId: string }) => [card.userId, card]));
+
+      const aiCard = byUserId.get(aiOnly) as { publicImage: { type: string } } | undefined;
+      expect(aiCard?.publicImage.type).toBe("AI_PUBLIC");
+
+      const blurCard = byUserId.get(blurOnly) as { publicImage: { type: string } } | undefined;
+      expect(blurCard?.publicImage.type).toBe("BLURRED_PUBLIC");
+
+      expect(byUserId.has(dropped)).toBe(false);
+    } finally {
+      for (const row of touched) {
+        await db.profileImage.update({ where: { id: row.id }, data: { generationStatus: row.generationStatus } });
+      }
+      if (previous === undefined) delete process.env.OBJECT_STORAGE_ENDPOINT;
+      else process.env.OBJECT_STORAGE_ENDPOINT = previous;
+    }
+
+    // 시드 이미지가 원래 상태로 돌아왔는지 확인한다.
+    expect(await db.profileImage.count()).toBe(24);
+    expect(await db.profileImage.count({ where: { generationStatus: "DONE" } })).toBe(24);
+  });
+
   it("공개 이미지 기준 주소가 설정되면 공개 버킷 경로로 URL 을 만든다", async () => {
     freeze();
     const previous = process.env.OBJECT_STORAGE_ENDPOINT;

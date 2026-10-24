@@ -8,8 +8,10 @@ import { prisma } from "../prisma.js";
 const SEED_EMAIL_DOMAIN = "@kkagung.local";
 const isSeedAccount = (email: string) => email.endsWith(SEED_EMAIL_DOMAIN);
 
-// auth.ts 의 로그인과 같은 payload·시크릿·만료를 사용한다.
-const issueToken = (user: { id: bigint; role: "USER" | "ADMIN" }) => jwt.sign({ sub: user.id.toString(), role: user.role }, config.jwtSecret, { expiresIn: "12h" });
+// 만료는 환경변수로 분리한다. 값이 없으면 개발 기본값을 쓴다.
+const tokenTtl = () => process.env.JWT_EXPIRES_IN ?? "12h";
+const issueToken = (user: { id: bigint; role: "USER" | "ADMIN" }) =>
+  jwt.sign({ sub: user.id.toString(), role: user.role }, config.jwtSecret, { expiresIn: tokenTtl() as jwt.SignOptions["expiresIn"] });
 
 // 서비스 날짜는 한국 시간 오전 8시 기준이다. KST = UTC+9 이므로 9시간 더하고 8시간 뺀 날짜를 쓴다.
 const serviceDate = (now: Date) => new Date(now.getTime() + (9 - 8) * 60 * 60 * 1000).toISOString().slice(0, 10);
