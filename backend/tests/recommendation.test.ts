@@ -80,6 +80,8 @@ afterAll(async () => {
   // 운세를 열면 추천 행과 새로고침권·재고 행도 함께 생긴다. 다른 테스트 파일의 순서나
   // 외래키 CASCADE 에 기대지 않고, 이 테스트가 쓴 서비스 날짜 분을 직접 지운다.
   if (createdBlockIds.length > 0) await db.block.deleteMany({ where: { id: { in: createdBlockIds.splice(0) } } });
+  await db.heart.deleteMany({ where: { OR: [{ senderId: { in: seedIds } }, { receiverId: { in: seedIds } }] } });
+  await db.chatRequest.deleteMany({ where: { OR: [{ senderId: { in: seedIds } }, { receiverId: { in: seedIds } }] } });
   await db.refreshToken.deleteMany({ where: { userId: { in: seedIds }, tokenDate: SERVICE_DATE } });
   await db.dailyRefreshInventory.deleteMany({ where: { serviceDate: SERVICE_DATE } });
   await db.recommendationItem.deleteMany({ where: { viewerId: { in: seedIds }, id: { notIn: keptItemIds } } });
@@ -212,6 +214,27 @@ describe("GET /api/v1/recommendations/today", () => {
 
     expect(status).toBe(409);
     expect(body.error.code).toBe("PROFILE_INCOMPLETE");
+  });
+
+  it("하트를 보낸 상대와 채팅을 요청한 상대를 표시한다", async () => {
+    freeze();
+    const viewerId = ids["demo@kkagung.local"];
+    const token = tokenFor(viewerId);
+    const opened = await call("/api/v1/daily/open", { method: "POST", token });
+    const [heartTarget, requestTarget] = opened.body.data.cards.map((card: { userId: string }) => card.userId);
+
+    await fetch(`${baseUrl}/api/v1/cards/${heartTarget}/hearts`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`${baseUrl}/api/v1/chat-requests`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: requestTarget, message: "이야기 나눠 볼까요?" }),
+    });
+
+    const listed = await call("/api/v1/recommendations/today", { token });
+
+    expect(listed.status).toBe(200);
+    expect(listed.body.data.heartedUserIds).toEqual([heartTarget]);
+    expect(listed.body.data.requestedUserIds).toEqual([requestTarget]);
   });
 
   it("운세를 연 뒤에는 같은 카드를 sourceType 과 함께 반환한다", async () => {

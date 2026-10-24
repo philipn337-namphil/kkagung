@@ -270,3 +270,19 @@ export const ensureDailyCards = async (viewerId: bigint, serviceDate: string, ca
 
   return readDailyCards(viewerId, serviceDate);
 };
+
+/**
+ * 카드에 이미 하트를 보냈는지, 채팅을 요청했는지 표시한다.
+ * 상대가 무시한 요청도 발신자에게는 '요청함'으로 남겨, 무시 사실을 알리지 않는다.
+ */
+export const interactionMarks = async (viewerId: bigint, targetIds: bigint[]) => {
+  if (targetIds.length === 0) return { heartedUserIds: [], requestedUserIds: [] };
+  const [hearts, requests] = await Promise.all([
+    prisma.heart.findMany({ where: { senderId: viewerId, receiverId: { in: targetIds }, canceledAt: null }, select: { receiverId: true } }),
+    prisma.chatRequest.findMany({ where: { senderId: viewerId, receiverId: { in: targetIds } }, select: { receiverId: true } }),
+  ]);
+  return {
+    heartedUserIds: hearts.map((heart) => heart.receiverId.toString()),
+    requestedUserIds: requests.map((request) => request.receiverId.toString()),
+  };
+};

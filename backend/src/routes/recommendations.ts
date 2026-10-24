@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import { fortuneDateOf, previewRefreshTargets, readDailyCards, saveRefreshCards, serviceDateOf } from "../lib/recommendation.js";
+import { fortuneDateOf, interactionMarks, previewRefreshTargets, readDailyCards, saveRefreshCards, serviceDateOf } from "../lib/recommendation.js";
 import { consumeRefreshTicket, readRefreshTicket } from "../lib/refreshTicket.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
@@ -33,8 +33,8 @@ recommendationsRouter.get("/today", async (req, res, next) => {
     if (fortune === null) return fail(res, 404, "RESOURCE_NOT_FOUND", "오늘 운세가 아직 없습니다.");
 
     const { sourceType, cards } = await readDailyCards(userId, serviceDate);
-    // 하트·채팅 요청 테이블이 아직 없어 두 목록은 빈 배열이다.
-    return ok(res, { serviceDate, sourceType, cards, heartedUserIds: [], requestedUserIds: [] });
+    const marks = await interactionMarks(userId, cards.map((card) => BigInt(card.userId)));
+    return ok(res, { serviceDate, sourceType, cards, ...marks });
   } catch (error) { next(error); }
 });
 
