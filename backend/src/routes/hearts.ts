@@ -11,20 +11,20 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 // 커서는 불투명한 문자열이다. 마지막으로 읽은 행의 id 만 담는다.
-const encodeCursor = (id: bigint) => Buffer.from(id.toString(), "utf8").toString("base64url");
-const decodeCursor = (cursor: string) => {
+export const encodeCursor = (id: bigint) => Buffer.from(id.toString(), "utf8").toString("base64url");
+export const decodeCursor = (cursor: string) => {
   const text = Buffer.from(cursor, "base64url").toString("utf8");
   if (!/^\d+$/.test(text)) return null;
   return BigInt(text);
 };
 
-const parseLimit = (raw: unknown) => {
+export const parseLimit = (raw: unknown) => {
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1 || value > MAX_LIMIT) return DEFAULT_LIMIT;
   return value;
 };
 
-const blockedIdsFor = async (userId: bigint) => {
+export const blockedIdsFor = async (userId: bigint) => {
   const blocks = await prisma.block.findMany({
     where: { OR: [{ blockerId: userId }, { targetUserId: userId }] },
     select: { blockerId: true, targetUserId: true },
@@ -38,7 +38,7 @@ const blockedIdsFor = async (userId: bigint) => {
 };
 
 // 무시한 사실은 발신자에게 알리지 않는다. 내가 보낸 요청의 IGNORED 는 PENDING 으로 보여준다.
-const senderFacingStatus = (status: string | undefined) => {
+export const senderFacingStatus = (status: string | undefined) => {
   if (status === undefined) return "NONE";
   return status === "IGNORED" ? "PENDING" : status;
 };

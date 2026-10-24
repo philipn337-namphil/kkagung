@@ -19,6 +19,8 @@ const REASON = {
   PREFERENCE_MATCH: "선호 조건이 일치해요.",
   PREFERENCE_RELAXED: "조건을 조금 넓혀 찾은 추천이에요.",
   RECEIVED_HEART: "나에게 하트를 보냈어요.",
+  CHAT_REQUEST_RECEIVED: "채팅을 요청했어요.",
+  CHAT_REQUEST_SENT: "내가 채팅을 요청했어요.",
 } as const;
 type ReasonCode = keyof typeof REASON;
 const reasonText = (code: string) => REASON[code as ReasonCode] ?? REASON.PREFERENCE_MATCH;
