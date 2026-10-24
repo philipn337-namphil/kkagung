@@ -123,6 +123,11 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
 model User {
   id              BigInt       @id @default(autoincrement())
   email           String       @unique @db.VarChar(255)
@@ -376,4 +381,30 @@ model Report {
   @@map("reports")
   @@index([status, createdAt])
   @@index([reporterId, targetType, targetId, reasonCode, status])
+}
+
+model AdminSetting {
+  settingKey           String   @map("setting_key") @db.VarChar(60)
+  effectiveServiceDate DateTime @map("effective_service_date") @db.Date
+  settingValue         Json     @map("setting_value")
+  updatedByAdminId     BigInt   @map("updated_by_admin_id")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  @@map("admin_settings")
+  @@id([settingKey, effectiveServiceDate])
+}
+
+model AdminAuditLog {
+  id          BigInt      @id @default(autoincrement())
+  adminId     BigInt      @map("admin_id")
+  requestId   String      @map("request_id") @db.VarChar(64)
+  action      String      @db.VarChar(60)
+  targetType  String      @map("target_type") @db.VarChar(30)
+  targetId    BigInt      @map("target_id")
+  beforeValue Json?       @map("before_value")
+  afterValue  Json?       @map("after_value")
+  result      AuditResult
+  createdAt   DateTime    @default(now()) @map("created_at")
+  @@map("admin_audit_logs")
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
 }
