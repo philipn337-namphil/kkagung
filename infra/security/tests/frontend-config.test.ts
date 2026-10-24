@@ -65,4 +65,21 @@ describe('production config (isolated process, empty environment fixture)', () =
     });
     expect(result.status).not.toBe(0);
   });
+  it.each([
+    ['development', undefined, '12h'],
+    ['production', undefined, '900s'],
+    ['development', '1800s', '1800s'],
+  ])('D-03 config %s override %s resolves to %s', (environment, ttl, expected) => {
+    const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
+    const env = { ...process.env, NODE_ENV: environment, JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(), DOTENV_CONFIG_PATH: 'does-not-exist.env' };
+    delete env.JWT_EXPIRES_IN;
+    if (ttl) env.JWT_EXPIRES_IN = ttl;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `const { config } = await import(${JSON.stringify(configUrl)}); console.log(JSON.stringify({ ttl: config.jwtExpiresIn ?? null }));`], {
+      cwd: mkdtempSync(resolve(tmpdir(), 'kkagung-ttl-config-')), env,
+      encoding: 'utf8', timeout: 10000,
+    });
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout.trim().split('\n').at(-1)!);
+    expect(output.ttl).toBe(expected);
+  });
 });

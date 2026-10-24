@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "7ace6274a0138a9f2d9f719e27f3ea322ad4fa50",
-  "recordedAt": "2026-10-23T08:59:17.072Z",
+  "baselineCommit": "aae89c787e8dc4ae428e315f4c5ee507fc84f300",
+  "recordedAt": "2026-10-24T16:45:40.014Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "build": {
@@ -9,10 +9,10 @@
   },
   "tests": {
     "exitCode": 1,
-    "passed": 7,
-    "failed": 16,
+    "passed": 10,
+    "failed": 21,
     "pending": 7,
-    "total": 30,
+    "total": 38,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -35,6 +35,18 @@
         "status": "failed"
       },
       {
+        "name": "production config (isolated process, empty environment fixture) D-03 config development override undefined resolves to 12h",
+        "status": "failed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) D-03 config production override undefined resolves to 900s",
+        "status": "failed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) D-03 config development override 1800s resolves to 1800s",
+        "status": "failed"
+      },
+      {
         "name": "existing authentication and profile routes (mock DB) missing token returns 401",
         "status": "passed"
       },
@@ -49,6 +61,18 @@
       {
         "name": "existing authentication and profile routes (mock DB) wrong issuer and audience must return 401",
         "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) HS512 must be rejected when only HS256 is allowed",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) token without expiry must be rejected",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) malformed token subject returns 401",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) valid token accesses own profile",
@@ -79,8 +103,16 @@
         "status": "failed"
       },
       {
-        "name": "existing authentication and profile routes (mock DB) login token must respect 15 minute policy and required claims",
+        "name": "existing authentication and profile routes (mock DB) D-03 development login token uses 12 hour TTL",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) login token contains issuer audience and token ID",
         "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) suspended account login is rejected",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) login failure bursts must eventually return 429 (50 local requests)",

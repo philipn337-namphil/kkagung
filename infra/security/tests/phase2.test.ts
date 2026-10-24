@@ -6,6 +6,8 @@ import type { Server } from 'node:http';
 // Test-only credentials are generated per run. No live DB, storage, API key or photo.
 const fixture = vi.hoisted(() => {
   process.env.JWT_SECRET = crypto.randomUUID() + crypto.randomUUID();
+  process.env.NODE_ENV = 'development';
+  delete process.env.JWT_EXPIRES_IN;
   process.env.FRONTEND_URL = 'http://localhost:5173';
   return { user: {} as any, saved: null as any };
 });
@@ -61,6 +63,16 @@ describe('existing authentication and profile routes (mock DB)', () => {
   it('wrong issuer and audience must return 401', async () => {
     expect((await request('/api/v1/me', sign({ iss: 'untrusted', aud: 'another-service' }))).status).toBe(401);
   });
+  it('HS512 must be rejected when only HS256 is allowed', async () => {
+    expect((await request('/api/v1/me', sign({}, { algorithm: 'HS512' }))).status).toBe(401);
+  });
+  it('token without expiry must be rejected', async () => {
+    const token = jwt.sign({ sub: '1', role: 'USER', iss: 'kkagung-api', aud: 'kkagung-client', jti: crypto.randomUUID() }, process.env.JWT_SECRET!);
+    expect((await request('/api/v1/me', token)).status).toBe(401);
+  });
+  it('malformed token subject returns 401', async () => {
+    expect((await request('/api/v1/me', sign({ sub: 'not-an-id' }))).status).toBe(401);
+  });
   it('valid token accesses own profile', async () => {
     const response = await request('/api/v1/me', sign());
     expect(response.status).toBe(200);
@@ -88,12 +100,20 @@ describe('existing authentication and profile routes (mock DB)', () => {
     fixture.user.status = 'WITHDRAWN';
     expect((await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password })).status).toBe(403);
   });
-  it('login token must respect 15 minute policy and required claims', async () => {
+  it('D-03 development login token uses 12 hour TTL', async () => {
     const response = await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password });
     const claims: any = jwt.decode((await response.json()).data.token);
     // Only duration is compared: failing output never contains token values.
-    expect(claims.exp - claims.iat).toBe(900);
+    expect(claims.exp - claims.iat).toBe(43200);
+  });
+  it('login token contains issuer audience and token ID', async () => {
+    const response = await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password });
+    const claims: any = jwt.decode((await response.json()).data.token);
     expect(Boolean(claims.iss && claims.aud && claims.jti)).toBe(true);
+  });
+  it('suspended account login is rejected', async () => {
+    fixture.user.status = 'SUSPENDED';
+    expect((await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password })).status).toBe(403);
   });
   it('login failure bursts must eventually return 429 (50 local requests)', async () => {
     const statuses = [];
@@ -129,17 +149,17 @@ describe('existing authentication and profile routes (mock DB)', () => {
 });
 
 describe('admin middleware in isolation (not an implemented admin API)', () => {
-  const invoke = (token: string) => {
+  const invoke = async (token: string) => {
     const result = { status: 0, continued: false };
     const req: any = { header: () => `Bearer ${token}` };
     const res: any = { status: (code: number) => { result.status = code; return res; }, json: () => res };
-    requireAuth(req, res, () => requireAdmin(req, res, () => { result.continued = true; }));
+    await requireAuth(req, res, () => requireAdmin(req, res, () => { result.continued = true; }));
     return result;
   };
-  it('USER role is rejected with 403 by middleware', () => expect(invoke(sign()).status).toBe(403));
-  it('revoked admin role must not trust stale ADMIN token', () => {
+  it('USER role is rejected with 403 by middleware', async () => expect((await invoke(sign())).status).toBe(403));
+  it('revoked admin role must not trust stale ADMIN token', async () => {
     fixture.user.role = 'USER';
-    expect(invoke(sign({ role: 'ADMIN' })).continued).toBe(false);
+    expect((await invoke(sign({ role: 'ADMIN' }))).continued).toBe(false);
   });
 });
 
