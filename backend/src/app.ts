@@ -15,6 +15,7 @@ import { devRouter } from "./routes/dev.js";
 import { heartsRouter } from "./routes/hearts.js";
 import { meRouter } from "./routes/me.js";
 import { recommendationsRouter } from "./routes/recommendations.js";
+import { reportsRouter } from "./routes/reports.js";
 import { prisma } from "./prisma.js";
 
 export const app = express();
@@ -30,6 +31,7 @@ app.use("/api/v1/chat-requests", chatRequestsRouter);
 app.use("/api/v1/chat-rooms", chatRoomsRouter);
 app.use("/api/v1/cards", cardsRouter);
 app.use("/api/v1/me/blocks", blocksRouter);
+app.use("/api/v1/reports", reportsRouter);
 // 개발·시연 전용. 꺼져 있거나 운영 환경이면 등록하지 않아 아래 404 처리가 그대로 응답한다.
 if (process.env.ENABLE_TEST_ACCOUNTS === "true" && process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production") app.use("/api/v1/dev", devRouter);
 app.use((_req, res) => fail(res, 404, "RESOURCE_NOT_FOUND", "요청한 경로가 없습니다."));
