@@ -21,6 +21,7 @@ const REASON = {
   RECEIVED_HEART: "나에게 하트를 보냈어요.",
   CHAT_REQUEST_RECEIVED: "채팅을 요청했어요.",
   CHAT_REQUEST_SENT: "내가 채팅을 요청했어요.",
+  CHAT_PARTNER: "채팅 중인 상대예요.",
 } as const;
 type ReasonCode = keyof typeof REASON;
 const reasonText = (code: string) => REASON[code as ReasonCode] ?? REASON.PREFERENCE_MATCH;
