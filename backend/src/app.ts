@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import { fail, ok } from "./lib/response.js";
 import { authRouter } from "./routes/auth.js";
 import { chatRequestsRouter } from "./routes/chatRequests.js";
+import { cardsRouter } from "./routes/cards.js";
 import { chatRoomsRouter } from "./routes/chatRooms.js";
 import { dailyRouter } from "./routes/daily.js";
 import { devRouter } from "./routes/dev.js";
@@ -26,6 +27,7 @@ app.use("/api/v1/recommendations", recommendationsRouter);
 app.use("/api/v1", heartsRouter);
 app.use("/api/v1/chat-requests", chatRequestsRouter);
 app.use("/api/v1/chat-rooms", chatRoomsRouter);
+app.use("/api/v1/cards", cardsRouter);
 // 개발·시연 전용. 꺼져 있거나 운영 환경이면 등록하지 않아 아래 404 처리가 그대로 응답한다.
 if (process.env.ENABLE_TEST_ACCOUNTS === "true" && process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production") app.use("/api/v1/dev", devRouter);
 app.use((_req, res) => fail(res, 404, "RESOURCE_NOT_FOUND", "요청한 경로가 없습니다."));
