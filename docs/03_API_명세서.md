@@ -16,7 +16,13 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 - Base URL: `/api/v1`
 - 인증: `Authorization: Bearer {token}`
-- 토큰 유효 기간은 12시간이며 역할(`USER`/`ADMIN`)을 담는다. 서버는 토큰의 역할 값만 믿지 않고 요청 시점의 계정 역할·상태를 다시 확인한다.
+- 토큰 유효 기간은 `JWT_EXPIRES_IN` 환경별 설정값이며 기본은 개발 `12h`, 운영(`NODE_ENV=production`) `900s`다. 값은 `900s`, `15m`, `12h`처럼 양의 정수와 단위(s/m/h/d)로 지정한다.
+- JWT는 HS256만 허용한다. `sub`·`iat`·`exp`·`iss`·`aud`·`jti`를 발급하며 필수 클레임·서명·만료·발급자·대상을 검증한다. 기존 필수 클레임 없는 토큰은 401이므로 배포 후 다시 로그인해야 한다.
+- JWT 역할(`USER`/`ADMIN`)은 호환용 정보다. 권한은 매 요청 현재 DB의 계정 역할·상태·성인 인증 여부로 결정한다. 삭제 계정은 401, 정지·탈퇴 계정은 403, 성인 인증 미완료는 `403 ADULT_VERIFICATION_REQUIRED`다.
+- 로그인에서도 정지·탈퇴·성인 인증 미완료 계정을 차단한다. `RECOMMENDATION_BLOCKED`·`CHAT_RESTRICTED`는 전체 로그인 금지가 아니며 해당 기능 API에서 추가 제한해야 한다.
+- 관리자 계정으로 보호 API에 접근하려면 `ACTIVE` 상태여야 한다. 일반 사용자의 추천·채팅 부분 제재는 전체 인증 접근을 차단하지 않는다.
+- 시작 전 `JWT_SECRET`은 비공개 난수 문자열 최소 32 UTF-8 바이트로 설정한다. 빈 값·짧은 값·공개된 기본 예시 키는 개발/운영 모두 거부한다. 새 환경 변수와 기존 AUTH_ACCESS_TOKEN_TTL_SECONDS가 함께 있으면 인증 만료 설정은 `JWT_EXPIRES_IN`을 사용한다.
+- 로그아웃의 서버 토큰 무효화는 아직 구현되지 않았다. `jti` 발급만으로 토큰이 폐기되지 않으며 DB/세션 저장소 구현은 별도 작업이다. 가입의 `adultVerified` 임시 처리도 제공자 검증 구현 전까지 미해결이다.
 - 응답 시각은 ISO 8601 UTC(`Z`)로 전달하고 화면에서 한국 시간으로 변환한다.
 - 실제 사진 URL은 수락된 채팅방 참여자만 받을 수 있다.
 - `/admin` API는 `ADMIN` 역할만 호출한다.
@@ -246,7 +252,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 성공 `200`: `register`와 같은 모양(`token`, `user`).
 
-- 오류: `VALIDATION_ERROR` 400, `INVALID_CREDENTIALS` 401, `SUSPENDED_USER` 403, `TOO_MANY_REQUESTS` 429
+- 오류: `VALIDATION_ERROR` 400, `INVALID_CREDENTIALS` 401, `SUSPENDED_USER` 403, `FORBIDDEN` 403(탈퇴), `ADULT_VERIFICATION_REQUIRED` 403(성인 인증 미완료), `TOO_MANY_REQUESTS` 429(속도 제한 구현 시)
 - 특별 규칙: 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분하지 않고 둘 다 `INVALID_CREDENTIALS`로 응답한다. 가입 여부를 알아내지 못하게 하기 위함이다.
 - 반복 호출: 멱등(상태 변화는 `lastActiveAt` 갱신뿐).
 

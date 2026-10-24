@@ -73,6 +73,24 @@ describe('existing authentication and profile routes (mock DB)', () => {
   it('malformed token subject returns 401', async () => {
     expect((await request('/api/v1/me', sign({ sub: 'not-an-id' }))).status).toBe(401);
   });
+  it('token without token ID returns 401', async () => {
+    expect((await request('/api/v1/me', sign({ jti: undefined }))).status).toBe(401);
+  });
+  it('token without issued-at returns 401', async () => {
+    expect((await request('/api/v1/me', sign({}, { noTimestamp: true }))).status).toBe(401);
+  });
+  it('future issued-at and overflowing subject return 401', async () => {
+    expect((await request('/api/v1/me', sign({ iat: Math.floor(Date.now() / 1000) + 3600 }))).status).toBe(401);
+    expect((await request('/api/v1/me', sign({ sub: '9223372036854775808' }))).status).toBe(401);
+  });
+  it('raw token without Bearer scheme returns 401', async () => {
+    const response = await fetch(base + '/api/v1/me', { headers: { Authorization: sign() } });
+    expect(response.status).toBe(401);
+  });
+  it('deleted account returns 401 despite valid token', async () => {
+    fixture.user = null;
+    expect((await request('/api/v1/me', sign())).status).toBe(401);
+  });
   it('valid token accesses own profile', async () => {
     const response = await request('/api/v1/me', sign());
     expect(response.status).toBe(200);
@@ -85,6 +103,10 @@ describe('existing authentication and profile routes (mock DB)', () => {
   it('unverified account must be rejected', async () => {
     fixture.user.adultVerifiedAt = null;
     expect((await request('/api/v1/me', sign())).status).toBe(403);
+  });
+  it.each(['RECOMMENDATION_BLOCKED', 'CHAT_RESTRICTED'])('limited USER status %s does not prohibit all authenticated APIs', async status => {
+    fixture.user.status = status;
+    expect((await request('/api/v1/me', sign())).status).toBe(200);
   });
   it('logged-out token must not remain usable', async () => {
     const token = sign();
@@ -113,6 +135,10 @@ describe('existing authentication and profile routes (mock DB)', () => {
   });
   it('suspended account login is rejected', async () => {
     fixture.user.status = 'SUSPENDED';
+    expect((await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password })).status).toBe(403);
+  });
+  it('unverified account login is rejected', async () => {
+    fixture.user.adultVerifiedAt = null;
     expect((await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password })).status).toBe(403);
   });
   it('login failure bursts must eventually return 429 (50 local requests)', async () => {
@@ -160,6 +186,20 @@ describe('admin middleware in isolation (not an implemented admin API)', () => {
   it('revoked admin role must not trust stale ADMIN token', async () => {
     fixture.user.role = 'USER';
     expect((await invoke(sign({ role: 'ADMIN' }))).continued).toBe(false);
+  });
+  it('current DB admin role overrides stale USER role', async () => {
+    fixture.user.role = 'ADMIN';
+    expect((await invoke(sign())).continued).toBe(true);
+  });
+  it('suspended admin cannot pass middleware', async () => {
+    fixture.user.role = 'ADMIN';
+    fixture.user.status = 'SUSPENDED';
+    expect((await invoke(sign({ role: 'ADMIN' }))).status).toBe(403);
+  });
+  it('non-active admin cannot pass middleware', async () => {
+    fixture.user.role = 'ADMIN';
+    fixture.user.status = 'CHAT_RESTRICTED';
+    expect((await invoke(sign({ role: 'ADMIN' }))).status).toBe(403);
   });
 });
 

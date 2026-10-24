@@ -56,6 +56,15 @@ describe('frontend profile output encoding (renderer, no browser script executio
 });
 
 describe('production config (isolated process, empty environment fixture)', () => {
+  it.each(['', 'short-test-value', 'local_development_secret_change_before_production'])('development also rejects empty short or known example key (%s)', secret => {
+    const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(configUrl)})`], {
+      cwd: mkdtempSync(resolve(tmpdir(), 'kkagung-key-config-')),
+      env: { ...process.env, NODE_ENV: 'development', JWT_SECRET: secret, DOTENV_CONFIG_PATH: 'does-not-exist.env' },
+      encoding: 'utf8', timeout: 10000,
+    });
+    expect(result.status).not.toBe(0);
+  });
   it('empty production JWT signing key must fail on startup', () => {
     const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(configUrl)})`], {
@@ -81,5 +90,14 @@ describe('production config (isolated process, empty environment fixture)', () =
     expect(result.status).toBe(0);
     const output = JSON.parse(result.stdout.trim().split('\n').at(-1)!);
     expect(output.ttl).toBe(expected);
+  });
+  it.each(['', '900', '0s', '-1h', 'not-a-duration', '900s\n'])('invalid TTL %s fails before startup', ttl => {
+    const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(configUrl)})`], {
+      cwd: mkdtempSync(resolve(tmpdir(), 'kkagung-invalid-ttl-')),
+      env: { ...process.env, NODE_ENV: 'production', JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(), JWT_EXPIRES_IN: ttl, DOTENV_CONFIG_PATH: 'does-not-exist.env' },
+      encoding: 'utf8', timeout: 10000,
+    });
+    expect(result.status).not.toBe(0);
   });
 });
