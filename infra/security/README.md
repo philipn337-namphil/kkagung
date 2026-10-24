@@ -1,5 +1,8 @@
 # 보안·운영 검증 실행
 
+추가: [미병합 소셜 라우트 검증](SOCIAL_REVIEW_20261025.md) — 16개 중 15 통과·1 실패(SOC-01). 기존 60개와 별도 scope다.
+실행: `node --test --test-reporter=tap infra/security/social-route-audit.test.mjs`. 대상 Git 커밋이 로컬에 있어야 한다.
+
 최신 판정(2026-10-25): 승인된 인증 수정 후 빌드 통과, **60개 = 45 통과 / 8 실패 / 7 보류**.
 [인증 수정 결과](AUTH_IMPLEMENTATION_20261025.md)를 우선 읽는다. [이전 보고서](REVALIDATION_20261025.md)는 수정 전 기록이다.
 사용자가 config.ts·middleware/auth.ts·routes/auth.ts 수정을 승인했다. 다른 기능 코드는 변경하지 않았다.

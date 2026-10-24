@@ -1,0 +1,9 @@
+{
+  "revision": "64c27029008988acddb7a4978b5648142da0e109",
+  "mode": "unchanged Git route source; mocked authentication actor, Prisma, card builder; real Express HTTP; NOT integrated JWT or DB verification",
+  "sourceHashes": {
+    "backend/src/routes/chatRequests.ts": "68211bb2c74ad1e24e61d83f565ca65f0b1291b51f460a51ac3f3c4e6f06635e",
+    "backend/src/routes/hearts.ts": "97a70073140c0fc514bbc72233f06a496cb32ebcd34508b2ac375d6ef1fb9f3f",
+    "backend/src/routes/chatRooms.ts": "8ae45a5ff433737545974ee416801f52d8b3387ee814a54afe68627481e64ff6"
+  }
+}
