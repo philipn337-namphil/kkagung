@@ -77,7 +77,8 @@ erDiagram
 | `recommendation_items` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. |
 | `daily_refresh_inventory` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 날짜 PK 컬럼 이름은 공통 규칙에 따라 `service_date`다. |
 | `refresh_tokens` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. `token_date`가 `daily_refresh_inventory.service_date`를 참조한다. |
-| `blocks` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 추천 목록의 양방향 차단 필터에 필요해 함께 만들었다. `reports`는 아직 미구현이다. |
+| `blocks` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 추천 목록의 양방향 차단 필터에 필요해 함께 만들었다. |
+| `reports` | **구현됨(Phase 2)** | `2026102305_add_reports` 마이그레이션으로 생성한다. 중복 신고 차단은 MySQL 부분 유일 인덱스를 쓸 수 없어 애플리케이션이 트랜잭션 안에서 검사한다. `target_type`이 `MESSAGE`인 `target_id`에는 외래키를 걸지 않았다. |
 | `hearts` | **구현됨(Phase 2)** | `2026102304_add_heart_chat_tables` 마이그레이션으로 생성한다. |
 | `chat_requests` | **구현됨(Phase 2)** | 같은 테이블. 동일 쌍 `PENDING` 중복 금지는 MySQL 부분 유일 인덱스를 쓸 수 없어 애플리케이션이 트랜잭션 안에서 검사한다. |
 | `chat_rooms` | **구현됨(Phase 2)** | 같은 테이블. "수락 요청당 방 하나"를 `chat_request_id UNIQUE` 외래키로 표현했다. |

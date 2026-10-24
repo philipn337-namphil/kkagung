@@ -102,6 +102,27 @@ enum ChatRequestSource {
   RECEIVED_HEART
 }
 
+enum ReportTargetType {
+  USER
+  MESSAGE
+}
+
+enum ReportReasonCode {
+  SPAM
+  ABUSE
+  SEXUAL
+  FAKE_PROFILE
+  UNDERAGE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
 model User {
   id              BigInt       @id @default(autoincrement())
   email           String       @unique @db.VarChar(255)
@@ -127,6 +148,7 @@ model User {
   chatRequestsReceived ChatRequest[] @relation("ChatRequestReceiver")
   chatRoomMembers ChatRoomMember[]
   chatMessages    ChatMessage[]
+  reportsMade     Report[]        @relation("ReportReporter")
   @@map("users")
   @@index([status, lastActiveAt])
 }
@@ -335,4 +357,23 @@ model ChatMessage {
   @@map("chat_messages")
   @@unique([roomId, senderId, clientMessageId])
   @@index([roomId, id(sort: Desc)])
+}
+
+model Report {
+  id               BigInt            @id @default(autoincrement())
+  reporterId       BigInt            @map("reporter_id")
+  targetType       ReportTargetType  @map("target_type")
+  targetId         BigInt            @map("target_id")
+  reasonCode       ReportReasonCode  @map("reason_code")
+  detail           String?           @db.VarChar(500)
+  status           ReportStatus      @default(PENDING)
+  handledByAdminId BigInt?           @map("handled_by_admin_id")
+  handledAt        DateTime?         @map("handled_at")
+  resultNote       String?           @map("result_note") @db.VarChar(500)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  reporter         User              @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  @@map("reports")
+  @@index([status, createdAt])
+  @@index([reporterId, targetType, targetId, reasonCode, status])
 }
