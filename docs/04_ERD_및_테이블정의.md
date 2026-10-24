@@ -73,6 +73,16 @@ erDiagram
 | `user_profiles` | 있음 | |
 | `user_preferences` | 있음 | |
 | `profile_images` | **구현됨(Phase 2)** | `2026102302_add_profile_images` 마이그레이션으로 생성한다. |
+| `daily_fortunes` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. |
+| `recommendation_items` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. |
+| `daily_refresh_inventory` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 날짜 PK 컬럼 이름은 공통 규칙에 따라 `service_date`다. |
+| `refresh_tokens` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. `token_date`가 `daily_refresh_inventory.service_date`를 참조한다. |
+| `blocks` | **구현됨(Phase 2)** | `2026102303_add_home_tables` 마이그레이션으로 생성한다. 추천 목록의 양방향 차단 필터에 필요해 함께 만들었다. `reports`는 아직 미구현이다. |
+| `hearts` | **구현됨(Phase 2)** | `2026102304_add_heart_chat_tables` 마이그레이션으로 생성한다. |
+| `chat_requests` | **구현됨(Phase 2)** | 같은 테이블. 동일 쌍 `PENDING` 중복 금지는 MySQL 부분 유일 인덱스를 쓸 수 없어 애플리케이션이 트랜잭션 안에서 검사한다. |
+| `chat_rooms` | **구현됨(Phase 2)** | 같은 테이블. "수락 요청당 방 하나"를 `chat_request_id UNIQUE` 외래키로 표현했다. |
+| `chat_room_members` | **구현됨(Phase 2)** | 같은 테이블. PK는 `id`이고 `UNIQUE(room_id, user_id)`로 참여자 중복을 막는다. 참여자 2명 제한은 애플리케이션이 지킨다. |
+| `chat_messages` | **구현됨(Phase 2)** | 같은 테이블. |
 
 아래 나머지 테이블도 모두 미구현 상태이며 Phase 2 마이그레이션에서 생성한다.
 
