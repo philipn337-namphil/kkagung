@@ -1,6 +1,6 @@
 # 보안·운영 검증 실행
 
-추가: [미병합 소셜 라우트 검증](SOCIAL_REVIEW_20261025.md) — 16개 중 15 통과·1 실패(SOC-01). 기존 60개와 별도 scope다.
+추가: [미병합 소셜 라우트 검증](SOCIAL_REVIEW_20261025.md) — 24개 중 23 통과·1 실패(SOC-01). 기존 60개와 별도 scope다.
 실행: `node --test --test-reporter=tap infra/security/social-route-audit.test.mjs`. 대상 Git 커밋이 로컬에 있어야 한다.
 
 최신 판정(2026-10-25): 승인된 인증 수정 후 빌드 통과, **60개 = 45 통과 / 8 실패 / 7 보류**.

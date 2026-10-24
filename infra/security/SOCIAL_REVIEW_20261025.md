@@ -2,14 +2,16 @@
 
 ## 대상·방법
 
-- 대상: feature/backend-social `64c27029008988acddb7a4978b5648142da0e109`.
+- 대상: feature/backend-social `e24bcd3f993bb80a5dfd6675a8c1dc35e03c40e0`.
 - 기존 feature/security-ops 인증 수정과 develop에는 새 변경이 없어 기존 60개 결과를 유지했다. 다른 역할 브랜치를 병합하거나 수정하지 않았다.
 - Git 객체의 chatRequests.ts·chatRooms.ts·hearts.ts를 읽고 TypeScript를 메모리에서 변환해 변경 없이 실행했다.
 - 실제 Express HTTP 라우트만 검증했다. 인증 주체·Prisma·날짜·공개 카드 생성은 가짜 fixture다. JWT/실제 DB/추천 전체 흐름/트랜잭션 동시성 통합 검증이 아니다.
-- **별도 16개 = 15 통과 / 1 실패**, 종료 코드 1. 기존 60개와 서로 다른 검증 범위이므로 합산 통과율을 만들지 않는다.
+- **별도 24개 = 23 통과 / 1 실패**, 종료 코드 1. 기존 60개와 서로 다른 검증 범위이므로 합산 통과율을 만들지 않는다.
 
 ## 통과한 범위
 
+- 추가된 blocks.ts·reports.ts도 같은 방식으로 실행했다. 자기 차단·자기 신고 거부, 차단 중복 생성 방지, 다른 사용자의 차단 해제 거부, 차단 후 신규 요청 거부를 확인했다.
+- 비참여자의 메시지 신고는 404, 참여자는 신고 가능, 처리 중 중복 신고는 409이며 응답에 담당자 정보를 포함하지 않는다. DB 잠금·동시 중복 접수는 mock으로 검증할 수 없다.
 - 양방향 차단 관계에서 신규 채팅 요청·메시지 전송 403, 변경 없음.
 - 제3자와 발신자는 수신자를 대신해 요청을 수락할 수 없음.
 - 차단되지 않은 수신자는 정상 수락, 참여자는 정상 메시지 전송 가능.
@@ -44,7 +46,7 @@
 
 ## 증빙·재실행
 
-- `evidence/social-route-audit.tap`: 실제 16개 실행 결과. 실패는 201/3 writes, 기대는 403/0 writes.
+- `evidence/social-route-audit.tap`: 실제 24개 실행 결과. 실패는 201/3 writes, 기대는 403/0 writes.
 - `evidence/social-source-provenance.json`: 대상 커밋과 실행한 원본 소스 해시.
 - `social-route-audit.test.mjs`: 재현 fixture와 정확한 scope.
 

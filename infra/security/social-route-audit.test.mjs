@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 // Read Git objects only. Never merge, check out or edit the other role's source.
-const revision = '64c27029008988acddb7a4978b5648142da0e109';
+const revision = 'e24bcd3f993bb80a5dfd6675a8c1dc35e03c40e0';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(resolve(root, 'backend/package.json'));
 const ts = require('typescript');
@@ -48,6 +48,23 @@ const prisma = {
   },
   $transaction: async callback => callback(tx),
 };
+prisma.block.findUnique = async ({ where }) => matchingBlocks({ where: where.blockerId_targetUserId })[0] ?? null;
+prisma.block.create = async ({ data }) => {
+  const row = { id: 91n, ...data, createdAt: now };
+  state.blocks.push(row);
+  state.writes++;
+  return row;
+};
+prisma.block.deleteMany = async ({ where }) => {
+  const count = matchingBlocks({ where }).length;
+  state.blocks = state.blocks.filter(row => !(row.blockerId === where.blockerId && row.targetUserId === where.targetUserId));
+  return { count };
+};
+prisma.chatRoomMember = { count: async ({ where }) => [1n, 2n].includes(where.userId) ? 1 : 0 };
+tx.report = {
+  findFirst: async () => state.duplicate ? { id: 71n } : null,
+  create: async ({ data }) => { state.writes++; return { id: 71n, status: 'PENDING', createdAt: now, ...data }; },
+};
 const response = {
   fail: (res, status, code, message) => res.status(status).json({ success: false, data: null, error: { code, message } }),
   ok: (res, data, status = 200) => res.status(status).json({ success: true, data: JSON.parse(JSON.stringify(data, (_, value) => typeof value === 'bigint' ? value.toString() : value)), error: null }),
@@ -82,11 +99,16 @@ before(async () => {
   app.use(express.json());
   app.use('/api/v1/chat-requests', load('backend/src/routes/chatRequests.ts').chatRequestsRouter);
   app.use('/api/v1/chat-rooms', load('backend/src/routes/chatRooms.ts').chatRoomsRouter);
+  app.use('/api/v1/blocks', load('backend/src/routes/blocks.ts').blocksRouter);
+  app.use('/api/v1/reports', load('backend/src/routes/reports.ts').reportsRouter);
   app.use((error, _req, res, _next) => response.fail(res, 500, 'TEST_ERROR', 'Synthetic fixture error'));
   server = await new Promise(resolveServer => { const started = app.listen(0, '127.0.0.1', () => resolveServer(started)); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-beforeEach(() => { state.actor = 1n; state.blocks = []; state.statuses = {}; state.writes = 0; });
+beforeEach(() => {
+  state.actor = 1n; state.blocks = []; state.statuses = {}; state.writes = 0; state.duplicate = false;
+  prisma.chatMessage.findUnique = async () => null;
+});
 after(async () => {
   if (server) await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()));
   writeFileSync(resolve(root, 'infra/security/evidence/social-source-provenance.json'), JSON.stringify({ revision, mode: 'unchanged Git route source; mocked authentication actor, Prisma, card builder; real Express HTTP; NOT integrated JWT or DB verification', sourceHashes: sources }, null, 2) + '\n');
@@ -161,4 +183,45 @@ test('blocked room disables messaging and returns no original URLs', async () =>
   assert.equal(result.body.data.canSendMessage, false);
   assert.deepEqual(result.body.data.partner.originalImages, []);
   assert.equal(result.cache, 'no-store');
+});
+
+test('self block is rejected without writes', async () => {
+  assert.equal((await call('/api/v1/blocks', { targetUserId: '1' })).status, 400);
+  assert.equal(state.writes, 0);
+});
+test('block API prevents subsequent new requests', async () => {
+  assert.equal((await call('/api/v1/blocks', { targetUserId: '2' })).status, 201);
+  assert.equal((await call('/api/v1/chat-requests', { targetUserId: '2', message: 'Fixture' })).status, 403);
+});
+test('repeated block does not create duplicate writes', async () => {
+  await call('/api/v1/blocks', { targetUserId: '2' });
+  await call('/api/v1/blocks', { targetUserId: '2' });
+  assert.equal(state.writes, 1);
+});
+test('user cannot delete another users block', async () => {
+  blocked(2n);
+  const result = await fetch(base + '/api/v1/blocks/2', { method: 'DELETE' });
+  assert.equal(result.status, 404);
+  assert.equal(state.blocks.length, 1);
+});
+test('self report is rejected without writes', async () => {
+  assert.equal((await call('/api/v1/reports', { targetType: 'USER', targetId: '1', reasonCode: 'SPAM' })).status, 400);
+  assert.equal(state.writes, 0);
+});
+test('nonmember cannot report a private message', async () => {
+  state.actor = 3n;
+  prisma.chatMessage.findUnique = async () => ({ roomId: 301n, senderId: 2n });
+  assert.equal((await call('/api/v1/reports', { targetType: 'MESSAGE', targetId: '51', reasonCode: 'SPAM' })).status, 404);
+  assert.equal(state.writes, 0);
+});
+test('member can report a message with no handler details returned', async () => {
+  prisma.chatMessage.findUnique = async () => ({ roomId: 301n, senderId: 2n });
+  const result = await call('/api/v1/reports', { targetType: 'MESSAGE', targetId: '51', reasonCode: 'SPAM' });
+  assert.equal(result.status, 201);
+  assert.deepEqual(Object.keys(result.body.data).sort(), ['createdAt', 'reportId', 'status']);
+});
+test('duplicate pending report is rejected without writes', async () => {
+  state.duplicate = true;
+  assert.equal((await call('/api/v1/reports', { targetType: 'USER', targetId: '2', reasonCode: 'SPAM' })).status, 409);
+  assert.equal(state.writes, 0);
 });
