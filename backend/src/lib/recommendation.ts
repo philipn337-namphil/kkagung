@@ -18,6 +18,7 @@ const ANY = "ANY";
 const REASON = {
   PREFERENCE_MATCH: "선호 조건이 일치해요.",
   PREFERENCE_RELAXED: "조건을 조금 넓혀 찾은 추천이에요.",
+  RECEIVED_HEART: "나에게 하트를 보냈어요.",
 } as const;
 type ReasonCode = keyof typeof REASON;
 const reasonText = (code: string) => REASON[code as ReasonCode] ?? REASON.PREFERENCE_MATCH;
@@ -145,7 +146,8 @@ const publicImageOf = (images: { imageType: string; objectKey: string }[]) => {
   return { url: `${endpoint}/${bucket}/${chosen.objectKey}`, type: chosen.imageType };
 };
 
-const toCards = async (viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[]) => {
+// 하트·채팅 목록도 같은 공개 카드 모양을 쓴다. 변환을 한 곳에만 두기 위해 내보낸다.
+export const buildPublicCards = async (viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[]) => {
   if (items.length === 0) return [];
   const excluded = new Set<string>();
   const blocks = await prisma.block.findMany({
@@ -200,7 +202,7 @@ export const readDailyCards = async (viewerId: bigint, serviceDate: string) => {
   });
   const refreshed = items.filter((item) => item.sourceType === "REFRESH");
   const bundle = refreshed.length > 0 ? refreshed : items;
-  return { sourceType: refreshed.length > 0 ? "REFRESH" : "INITIAL", cards: await toCards(viewerId, serviceDate, bundle) };
+  return { sourceType: refreshed.length > 0 ? "REFRESH" : "INITIAL", cards: await buildPublicCards(viewerId, serviceDate, bundle) };
 };
 
 /** 새로고침으로 보여줄 새 후보를 고른다. 저장도, 권 소비도 하지 않는다. */
@@ -235,7 +237,7 @@ export const saveRefreshCards = async (viewerId: bigint, serviceDate: string, pi
     orderBy: { displayOrder: "asc" },
     select: { targetUserId: true, reasonCode: true },
   });
-  return { sourceType: "REFRESH", cards: await toCards(viewerId, serviceDate, refreshed) };
+  return { sourceType: "REFRESH", cards: await buildPublicCards(viewerId, serviceDate, refreshed) };
 };
 
 export const ensureDailyCards = async (viewerId: bigint, serviceDate: string, cardCount: number) => {
