@@ -284,7 +284,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
   "success": true,
   "data": {
     "accounts": [
-      { "accountId": "1", "email": "admin@kkagung.local", "role": "ADMIN", "displayName": "관리자", "gender": null, "age": null, "profileCompleted": false },
+      { "accountId": "1", "email": "admin@kkagung.local", "role": "ADMIN", "displayName": null, "gender": null, "age": null, "profileCompleted": false },
       { "accountId": "2", "email": "user01@kkagung.local", "role": "USER", "displayName": "서윤", "gender": "FEMALE", "age": 27, "profileCompleted": true }
     ]
   },
@@ -293,6 +293,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 ```
 
 - 오류: `RESOURCE_NOT_FOUND` 404(운영 환경)
+- 프로필이 없는 계정은 `displayName`, `gender`, `age`가 모두 `null`이고 `profileCompleted`가 `false`다. 화면은 이메일 등으로 대체 표시한다.
 - 특별 규칙: 비밀번호·해시는 절대 반환하지 않는다. 시드로 만든 계정만 반환하며 실제 가입자는 포함하지 않는다. 판별은 시드 전용 이메일 도메인(`@kkagung.local`)으로 한다. 이 방식은 `users` 테이블에 새 컬럼을 추가하지 않으므로 ERD 변경이 필요 없다.
 - 반복 호출: 멱등.
 
@@ -313,11 +314,12 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 본문 없음. 성공 `200`:
 
 ```json
-{ "success": true, "data": { "reseeded": true, "accountCount": 8, "serviceDate": "2026-10-27" }, "error": null }
+{ "success": true, "data": { "reseeded": true, "accountCount": 9, "serviceDate": "2026-10-27" }, "error": null }
 ```
 
 - 오류: `RESOURCE_NOT_FOUND` 404(운영 환경)
 - 특별 규칙: **시드 계정이 만든 데이터만** 지운다(하트, 채팅 요청, 채팅방, 메시지, 신고, 차단, 당일 운세·추천·새로고침권). 실제 가입자 데이터는 건드리지 않는다. 운영 환경에서는 라우터 자체가 등록되지 않으므로 사고로 호출될 수 없다.
+- 현재 구현: 삭제 대상 테이블(하트·채팅 등)이 아직 없어 응답만 반환한다. 해당 테이블이 추가되면 시드 계정의 행만 삭제하고 시드 상태로 되돌리도록 확장한다.
 - 반복 호출: 멱등.
 
 ## 3. 내 정보·프로필·선호 조건
@@ -604,9 +606,10 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 오류: `UNAUTHORIZED` 401, `PROFILE_INCOMPLETE` 409, `REFRESH_TOKEN_NOT_FOUND` 404, `REFRESH_TOKEN_EXPIRED` 409, `REFRESH_TOKEN_ALREADY_USED` 409, `TOO_MANY_REQUESTS` 429
 - 특별 규칙:
   - 기본 묶음에 이미 나왔던 상대는 제외한 새 카드를 반환한다.
-  - 네트워크 재시도로 같은 요청이 두 번 도착해도 **한 번만 사용 처리**한다. 두 번째 호출은 이미 생성된 새로고침 묶음을 그대로 반환하며 새 묶음을 또 만들지 않는다.
+  - 새로 보여줄 후보가 한 명도 없으면 권을 쓰지 않는다. `200`과 빈 `cards`를 반환하고 `refreshTicket`은 `AVAILABLE` 상태로 남는다.
+  - 권은 **한 번만** 소비된다. 동시에 여러 번 호출해도 한 요청만 성공하고, 나머지와 이후의 재호출은 `REFRESH_TOKEN_ALREADY_USED`(409)로 거절된다. 이미 만든 새로고침 묶음은 `GET /recommendations/today`로 다시 읽는다.
   - 새로고침권은 다음 날 오전 8시(KST)에 만료된다.
-- 반복 호출: 멱등. 위 규칙에 따라 결과가 같다.
+- 반복 호출: 비멱등. 성공은 한 번뿐이고 두 번째부터는 `REFRESH_TOKEN_ALREADY_USED`다. 단 후보가 없어 권을 쓰지 않은 호출은 몇 번이든 같은 빈 응답을 준다.
 
 ### GET `/cards/{targetUserId}` 🔜
 
