@@ -72,7 +72,7 @@ erDiagram
 | `users` | 있음 | |
 | `user_profiles` | 있음 | |
 | `user_preferences` | 있음 | |
-| `profile_images` | **없음** | 이 문서에는 정의돼 있으나 코드로 구현되지 않았다. Phase 2에서 생성한다. |
+| `profile_images` | **구현됨(Phase 2)** | `2026102302_add_profile_images` 마이그레이션으로 생성한다. |
 
 아래 나머지 테이블도 모두 미구현 상태이며 Phase 2 마이그레이션에서 생성한다.
 
@@ -95,13 +95,14 @@ erDiagram
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
-| `slot` | `TINYINT` | 1~3. 사용자당 최대 3장. `UNIQUE(user_id, slot)` |
+| `slot` | `TINYINT` | 1~3. 사용자당 최대 3장. `UNIQUE(user_id, slot, image_type)` |
 | `generation_status` | `ENUM('PENDING','PROCESSING','DONE','FAILED')` | API의 `generationStatus`와 1:1 대응 |
 | `byte_size` | `INT` | 업로드 용량 검사 결과 기록 |
 | `width`, `height` | `SMALLINT` | 픽셀 한도 검사 결과 기록 |
 | `processed_at` | `DATETIME(3) NULL` | 변환 완료 시각 |
 | `failed_reason_code` | `VARCHAR(40) NULL` | 변환 실패 사유. 원본을 대신 공개하지 않기 위한 판단 근거 |
 
+- slot 하나에 원본·AI·블러 3가지 버전이 각각 별도 행으로 저장되므로 `image_type`을 유일 조건에 포함한다.
 - `image_type`은 기존 정의대로 `ORIGINAL_PRIVATE` / `AI_PUBLIC` / `BLURRED_PUBLIC`이다.
 - `object_key`만 저장하고 완성된 URL은 저장하지 않는다. 원본 URL은 요청 시마다 60초 임시 URL로 발급한다.
 - object key에 이름·이메일·생년월일·원래 파일명을 넣지 않는다.

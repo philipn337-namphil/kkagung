@@ -59,6 +59,19 @@ enum MilitaryService {
   ANY
 }
 
+enum ImageType {
+  ORIGINAL_PRIVATE
+  AI_PUBLIC
+  BLURRED_PUBLIC
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
 model User {
   id              BigInt       @id @default(autoincrement())
   email           String       @unique @db.VarChar(255)
@@ -71,6 +84,7 @@ model User {
   updatedAt       DateTime     @updatedAt @map("updated_at")
   profile         UserProfile?
   preference      UserPreference?
+  profileImages   ProfileImage[]
   @@map("users")
   @@index([status, lastActiveAt])
 }
@@ -111,4 +125,24 @@ model UserPreference {
   militaryService MilitaryService @default(ANY) @map("military_service")
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@map("user_preferences")
+}
+
+model ProfileImage {
+  id                BigInt            @id @default(autoincrement())
+  userId            BigInt            @map("user_id")
+  slot              Int               @db.TinyInt
+  imageType         ImageType         @map("image_type")
+  objectKey         String            @map("object_key") @db.VarChar(255)
+  generationStatus  GenerationStatus  @default(PENDING) @map("generation_status")
+  byteSize          Int               @map("byte_size")
+  width             Int               @db.SmallInt
+  height            Int               @db.SmallInt
+  processedAt       DateTime?         @map("processed_at")
+  failedReasonCode  String?           @map("failed_reason_code") @db.VarChar(40)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("profile_images")
+  @@unique([userId, slot, imageType])
+  @@index([userId, imageType, generationStatus])
 }
