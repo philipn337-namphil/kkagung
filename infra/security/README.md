@@ -1,5 +1,8 @@
 # 보안·운영 검증 실행
 
+최신 수정 결과: [SECURITY_FIXES_20261025.md](SECURITY_FIXES_20261025.md). 사용자 추가 승인으로 로그·HTML·정적 파일 노출 수정 및 채팅 차단 수정 브랜치를 작성했다. 현재 빌드 PASS, 71개 중 60 통과·4 실패·7 보류. 채팅 수정 커밋 별도 검증 24/24 통과. 아래 이전 수치는 이 수정 전 기록이다.
+
+
 추가: [미병합 소셜 라우트 검증](SOCIAL_REVIEW_20261025.md) — 24개 중 23 통과·1 실패(SOC-01). 기존 60개와 별도 scope다.
 실행: `node --test --test-reporter=tap infra/security/social-route-audit.test.mjs`. 대상 Git 커밋이 로컬에 있어야 한다.
 

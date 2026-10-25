@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "cbaa936045ae1a3f285c9aa5d40b4804780b566b",
-  "recordedAt": "2026-10-24T17:10:45.309Z",
+  "baselineCommit": "43ded8b12121c8fddb106845f077d1b61351bc5a",
+  "recordedAt": "2026-10-25T01:17:41.380Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "sourceHashes": {
@@ -8,11 +8,11 @@
     "backend/src/middleware/auth.ts": "4d4bc90e2f43b801f017c97ac58e7c3eea7c0fc4a610be764c798e0d5a51650f",
     "backend/src/routes/auth.ts": "790b20b83a1175ce9dff4d2bf2d897c574065e1b71fa5c7a98be865d9d5f559f",
     "backend/src/routes/me.ts": "fd08feb8ef5c28cdb61242cc3c40ea69559763965e6289232f7f45eb226f6a0c",
-    "backend/src/app.ts": "641929f7604bad922945aa530d385075e9584d3c3da5e991103b73ffe517694b",
-    "frontend/app.js": "faacebc651c24154d92aef0dc862456ef925674dc8c5fca990e3a88643062269",
-    "frontend/server.js": "c8e662a64489b2988a6e42908b96505ef9a8d57c0959cd855bf7cede79f51828",
+    "backend/src/app.ts": "60133ec068af8a00cc1a03dfc0d9806d23808e5c39a5da04eaf49d00c968c6e1",
+    "frontend/app.js": "0669cbd82e80707cad0a3807b8808d4792531bacd25a685a8e1018fadc25521d",
+    "frontend/server.js": "06b81f7395333a1da9307b9a46e98a8dfce9988d10bd80b62ccbce84a0d7f0b7",
     "infra/security/tests/phase2.test.ts": "bc0fcf717a01b2deae74842da8ec18d02cf709ebe9b446a57e1faa2928a36f8d",
-    "infra/security/tests/frontend-config.test.ts": "082a663ff9973a103f8c6777bd950749f6a35e3a7698b1079367901c4a9b6c7e",
+    "infra/security/tests/frontend-config.test.ts": "67b4de04b511930f1bf01d31e1c6fd0aed95108ce4bf4b8fcb6e2b0ce1fbfb7b",
     "infra/security/tests/production-auth.test.ts": "021c49eff8743fc7cf00fa160d038d7f8a0cd5a809acc95ccb446d94772f0582"
   },
   "build": {
@@ -21,10 +21,10 @@
   },
   "tests": {
     "exitCode": 1,
-    "passed": 45,
-    "failed": 8,
+    "passed": 60,
+    "failed": 4,
     "pending": 7,
-    "total": 60,
+    "total": 71,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -32,15 +32,59 @@
       },
       {
         "name": "frontend static file exposure (real server handler, loopback only) non-public file /server.js must not be served",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "frontend static file exposure (real server handler, loopback only) non-public file /.env.example must not be served",
-        "status": "failed"
+        "status": "passed"
       },
       {
-        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output",
-        "status": "failed"
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /.env must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /package.json must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /Dockerfile must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /%2eenv must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /..%2fbackend%2f.env must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /index.html remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /app.js remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /styles.css remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /config.js remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (<img src=x data-security-test=unescaped>)",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (\" autofocus onfocus=alert(1) x=\")",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (</textarea><script>alert(1)</script>)",
+        "status": "passed"
       },
       {
         "name": "production config (isolated process, empty environment fixture) development also rejects empty short or known example key ()",
@@ -208,7 +252,7 @@
       },
       {
         "name": "existing authentication and profile routes (mock DB) error logging must redact sensitive values",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "admin middleware in isolation (not an implemented admin API) USER role is rejected with 403 by middleware",

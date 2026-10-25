@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 // Read Git objects only. Never merge, check out or edit the other role's source.
-const revision = 'e24bcd3f993bb80a5dfd6675a8c1dc35e03c40e0';
+const revision = process.env.SOCIAL_AUDIT_REVISION || 'e24bcd3f993bb80a5dfd6675a8c1dc35e03c40e0';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(resolve(root, 'backend/package.json'));
 const ts = require('typescript');
@@ -111,7 +111,8 @@ beforeEach(() => {
 });
 after(async () => {
   if (server) await new Promise((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()));
-  writeFileSync(resolve(root, 'infra/security/evidence/social-source-provenance.json'), JSON.stringify({ revision, mode: 'unchanged Git route source; mocked authentication actor, Prisma, card builder; real Express HTTP; NOT integrated JWT or DB verification', sourceHashes: sources }, null, 2) + '\n');
+  const evidenceName = process.env.SOCIAL_AUDIT_FIXED === '1' ? 'social-fixed-source-provenance.json' : 'social-source-provenance.json';
+  writeFileSync(resolve(root, 'infra/security/evidence', evidenceName), JSON.stringify({ revision, mode: 'unchanged Git route source; mocked authentication actor, Prisma, card builder; real Express HTTP; NOT integrated JWT or DB verification', sourceHashes: sources }, null, 2) + '\n');
 });
 async function call(path, body) {
   const result = await fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

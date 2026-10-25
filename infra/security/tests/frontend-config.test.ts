@@ -33,15 +33,18 @@ describe('frontend static file exposure (real server handler, loopback only)', (
   });
   afterAll(async () => { if (server) await new Promise<void>((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose())); });
   it('normal static page remains available', async () => expect((await fetch(base + '/')).status).toBe(200));
-  it.each(['/server.js', '/.env.example'])('non-public file %s must not be served', async path => {
+  it.each(['/server.js', '/.env.example', '/.env', '/package.json', '/Dockerfile', '/%2eenv', '/..%2fbackend%2f.env'])('non-public file %s must not be served', async path => {
     const response = await fetch(base + path);
     await response.arrayBuffer();
     expect([403, 404].includes(response.status)).toBe(true);
   });
+  it.each(['/index.html', '/app.js', '/styles.css', '/config.js'])('public asset %s remains available', async path => {
+    expect((await fetch(base + path)).status).toBe(200);
+  });
 });
 
 describe('frontend profile output encoding (renderer, no browser script execution)', () => {
-  it('profile input must not create unescaped HTML in output', () => {
+  it.each(['<img src=x data-security-test=unescaped>', '\" autofocus onfocus=alert(1) x=\"', '</textarea><script>alert(1)</script>'])('profile input must not create unescaped HTML in output (%s)', marker => {
     const sandbox: any = {
       window: { addEventListener: () => {}, scrollTo: () => {} },
       sessionStorage: { getItem: () => null },
@@ -49,7 +52,6 @@ describe('frontend profile output encoding (renderer, no browser script executio
       document: { querySelector: () => ({ innerHTML: '', querySelector: () => null }) },
     };
     const source = readFileSync(resolve(root, 'frontend/app.js'), 'utf8');
-    const marker = '<img src=x data-security-test=unescaped>';
     vm.runInNewContext(source + `\nstate.profile = { displayName: ${JSON.stringify(marker)}, intro: ${JSON.stringify(marker)} }; globalThis.output = profile();`, sandbox);
     expect(sandbox.output.includes(marker)).toBe(false);
   });
