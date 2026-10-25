@@ -1,29 +1,39 @@
 # 보안·운영 검증 실행
 
-관리자 수정 최신 결과: [ADMIN_FIXES_20261025.md](ADMIN_FIXES_20261025.md). 별도 feature/security-admin-hardening에서 ADM-01/02를 수정하고 19/19 통과했다. JWT·DB·사진·실복구 통합 대기는 유지한다. 아래 관리자 7/9 결과는 수정 전 기록이다.
+## 현재 판정
 
+| 검증 묶음 | 결과 | 범위·한계 |
+|---|---|---|
+| 주요 보안 회귀 | 빌드 통과, 79개 중 72 통과·0 실패·7 통합 대기 | 실제 HTTP/JWT/bcrypt, mock DB |
+| 채팅 수정 c1ce830 / PR #17 | 24/24 통과 | 소셜 라우트, mock 인증·DB |
+| 관리자 수정 826f293 / PR #18 | 전체 빌드 통과, 19/19 통과 | 관리자 라우트·CIDR·감사 호출, mock 인증·DB |
 
-최신(2026-10-25): [SECURITY_FOLLOWUP_20261025.md](SECURITY_FOLLOWUP_20261025.md). DB 기반 로그아웃·속도 제한 및 운영 가입 차단 구현 후 빌드 통과, 79개 중 72 통과·0 실패·7 통합 대기. 별도 관리자 검증 9개 중 7 통과·2 실패(ADM-01/02). 아래 수치는 이전 기록이다.
+서로 다른 묶음은 합산하지 않는다. 모든 PR은 통합 전이며 실제 DB·사진·복구 검증은 미완료다. 전체 Phase 2 완료 또는 출시 승인이 아니다.
 
+- [최신 후속 구현](SECURITY_FOLLOWUP_20261025.md): 토큰 폐기·공용 속도 제한·운영 가입 차단.
+- [관리자 수정 결과](ADMIN_FIXES_20261025.md): CIDR 오류 거부·감사 전후 값.
+- [체크리스트](security-test-checklist.md), [보안 저장소 운영](SECURITY_STORAGE_20261025.md), [실제 복구 점검](BACKUP_RESTORE_CHECKLIST.md).
+- 보안 구현·증빙 PR #13, 채팅 수정 초안 PR #17, 관리자 수정 초안 PR #18. 후자의 두 PR은 담당 기능 코드가 먼저 통합되어야 한다.
 
-최신 수정 결과: [SECURITY_FIXES_20261025.md](SECURITY_FIXES_20261025.md). 사용자 추가 승인으로 로그·HTML·정적 파일 노출 수정 및 채팅 차단 수정 브랜치를 작성했다. 현재 빌드 PASS, 71개 중 60 통과·4 실패·7 보류. 채팅 수정 커밋 별도 검증 24/24 통과. 아래 이전 수치는 이 수정 전 기록이다.
+## 다른 담당자 없이 실행 가능한 로컬 점검
 
+Node만 있으면 실행할 수 있다. 아래 시험은 운영 DB·스토리지·실제 사진·비밀값에 접근하지 않는다.
 
-추가: [미병합 소셜 라우트 검증](SOCIAL_REVIEW_20261025.md) — 24개 중 23 통과·1 실패(SOC-01). 기존 60개와 별도 scope다.
-실행: `node --test --test-reporter=tap infra/security/social-route-audit.test.mjs`. 대상 Git 커밋이 로컬에 있어야 한다.
+```powershell
+node --test --test-reporter=tap infra/security/tests/local-ops.test.mjs
+node infra/security/check-git-safety.mjs --evidence
+node infra/security/local-backup-drill.mjs --evidence
+```
 
-최신 판정(2026-10-25): 승인된 인증 수정 후 빌드 통과, **60개 = 45 통과 / 8 실패 / 7 보류**.
-[인증 수정 결과](AUTH_IMPLEMENTATION_20261025.md)를 우선 읽는다. [이전 보고서](REVALIDATION_20261025.md)는 수정 전 기록이다.
-사용자가 config.ts·middleware/auth.ts·routes/auth.ts 수정을 승인했다. 다른 기능 코드는 변경하지 않았다.
+Git 검사기는 **현재 index에 들어간 파일**을 읽는다. 새 파일·수정 내용을 검사하려면 필요한 파일만 먼저 `git add`한 뒤 실행한다. 무시된 로컬 .env나 Git 과거 이력은 읽지 않는다. 금지 경로·키 파일·덤프, 개인키 본문·일부 키/JWT 리터럴, 예제 환경 파일의 비어 있지 않은 서명/API 키를 찾는다. 결과에는 경로·규칙만 기록한다. 모든 형태의 비밀값을 탐지하는 도구는 아니므로 수동 diff 확인도 필요하다. 발견 시 종료 1, 검사 실행 오류는 2다. 배포 승인을 뜻하지 않는다.
 
-- 범위·담당자별 문제·재현: [PHASE2_FINDINGS.md](PHASE2_FINDINGS.md)
-- 전체 체크리스트: [security-test-checklist.md](security-test-checklist.md)
-- 복구 절차: [BACKUP_RESTORE_CHECKLIST.md](BACKUP_RESTORE_CHECKLIST.md)
-- 비밀 없는 결과: [evidence/phase2-results.json](evidence/phase2-results.json)
+백업 연습은 새 임시 폴더의 가상 데이터만 AES-256-GCM으로 암호화·복원하고 해시·레코드 일치, 변조·잘림·잘못된 인증 태그 거부를 확인한다. 키는 메모리에만 두며 종료 시 임시 파일을 정리한다. 측정 시간은 로컬 fixture 실행 시간으로 실제 RTO가 아니다. DB·버킷 접근 제어 또는 실제 백업 복구 완료로 표시하지 않는다.
 
-## 재실행
+증빙은 evidence/git-safety-results.json, local-backup-drill.json, local-ops-tests.tap에 기록한다.
 
-Node 24와 npm, 백엔드 잠금 파일의 의존성이 필요하다. 실제 DB·스토리지·외부 API는 사용하지 않는다.
+## 주요 회귀 재실행
+
+Node 24, backend 잠금 파일의 의존성과 생성된 Prisma Client가 필요하다.
 
 ```powershell
 Push-Location backend
@@ -33,13 +43,23 @@ Pop-Location
 node infra/security/run-phase2.mjs
 ```
 
-실제 DB에 마이그레이션하거나 시드를 넣는 명령은 실행하지 않는다. Prisma 엔진 생성은 빌드용이다.
-테스트는 루프백 HTTP 연결을 사용한다. 샌드박스가 연결을 막으면 승인된 환경에서 같은 명령을 실행한다.
-스크립트는 TypeScript 빌드 후 Vitest를 실행하고 증빙을 갱신한다. 테스트 이름·판정만 저장하고 토큰·비밀번호·원본 URL은 저장하지 않는다.
-실패를 expected-failure로 숨기지 않는다. 현재 종료 코드 1은 8개의 다른 담당/협의 필요 미충족 때문이다. D-03 설정 연결은 통과했다. 과거 결과 JSON은 evidence/에 별도로 보존한다.
-7개 skip은 관리자·사진·채팅·업로드·복구 기능이 준비됐을 때 실제 통합 테스트로 교체해야 하는 추적 항목이다.
+실제 DB에 migrate/seed/reset하지 않는다. 스크립트는 빌드와 루프백 HTTP 테스트를 실행하고 비밀값을 제외한 결과·소스 해시를 evidence/phase2-results.json에 기록한다. 7개 skip은 실제 기능·DB·스토리지·복구 통합 대기로 유지한다.
 
-## 협업 범위
+## 채팅·관리자 수정 커밋 별도 재실행
 
-backend/frontend/Compose/API/DB 계약은 변경하지 않았다. 수정은 발견 보고서의 담당자와 합의 후 해당 역할 브랜치에서 진행한다.
-이 검증 PR은 Phase 2 보안 통과·배포 승인이 아니다. 백엔드의 검증 기준 기능이 추가되면 대상 커밋을 갱신하고 다시 실행한다.
+해당 커밋이 로컬 Git에 있어야 한다. 대상 코드를 checkout/merge하지 않고 Git 객체에서 읽는다.
+
+```powershell
+$env:SOCIAL_AUDIT_REVISION='c1ce830db2110a9d66153c138cf0d480d4542278'
+$env:SOCIAL_AUDIT_FIXED='1'
+node --test --test-reporter=tap infra/security/social-route-audit.test.mjs
+$env:ADMIN_AUDIT_REVISION='826f293ce054d4b7cd1c6062d0cbc8238a00b0a0'
+$env:ADMIN_AUDIT_FIXED='1'
+node --test --test-reporter=tap infra/security/admin-route-audit.test.mjs
+```
+
+환경 변수 없이 실행하면 수정 전 원본 결함을 재현한다. 실패를 expected-failure로 숨기지 않는다. 수정 전 결과는 별도 증빙으로 보존한다.
+
+## 이력
+
+AUTH_IMPLEMENTATION_20261025.md, REVALIDATION_20261025.md, SECURITY_FIXES_20261025.md, ADMIN_REVIEW_20261025.md, SOCIAL_REVIEW_20261025.md에는 이전 수치·발견 이력이 있다. 현재 판정은 위 표와 최신 수정 결과를 우선한다.
