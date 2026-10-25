@@ -28,9 +28,23 @@ services:
         condition: service_healthy
     environment:
       APP_PORT: 8080
+      APP_ENV: ${APP_ENV:-development}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
-      JWT_SECRET: ${JWT_SECRET:-local_development_secret_change_before_production}
+      # config.ts 는 32바이트 미만과 알려진 개발 기본키를 거부한다(SEC-09).
+      # 기본값을 두면 그 값이 그대로 쓰여 API 가 뜨지 않으므로, 반드시 .env 로 주입받는다.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env - 32 or more random bytes}
+      # D-03: 개발 12h, 운영 900s. 단위(s/m/h/d)를 반드시 붙인다.
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       DATABASE_URL: mysql://${DB_USER:-kkagung_app}:${DB_PASSWORD:-change_me}@mysql:3306/${DB_NAME:-kkagung}
+      # D-01: 공개(AI·블러) 버킷과 비공개(원본) 버킷을 분리한다.
+      # 엔드포인트가 비어 있으면 추천 카드의 publicImage 가 null 로 나간다.
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}
+      OBJECT_STORAGE_BUCKET_PUBLIC: ${OBJECT_STORAGE_BUCKET_PUBLIC:-kkagung-images-public}
+      OBJECT_STORAGE_BUCKET_PRIVATE: ${OBJECT_STORAGE_BUCKET_PRIVATE:-kkagung-images-private}
+      # 시연용 테스트 계정 API. 운영에서는 켜도 라우터가 등록되지 않는다.
+      ENABLE_TEST_ACCOUNTS: ${ENABLE_TEST_ACCOUNTS:-false}
+      # 관리자 API 접근 허용 대역. 비우면 IP 제한을 적용하지 않는다.
+      ADMIN_ALLOWED_IP_CIDRS: ${ADMIN_ALLOWED_IP_CIDRS:-}
     ports:
       - "8080:8080"
 
