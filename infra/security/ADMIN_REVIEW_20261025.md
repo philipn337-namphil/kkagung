@@ -1,5 +1,8 @@
 # 관리자 브랜치 보안 재검증
 
+관리자 수정 최신 결과: [ADMIN_FIXES_20261025.md](ADMIN_FIXES_20261025.md). 별도 feature/security-admin-hardening에서 ADM-01/02를 수정하고 19/19 통과했다. JWT·DB·사진·실복구 통합 대기는 유지한다. 아래 관리자 7/9 결과는 수정 전 기록이다.
+
+
 대상: feature/backend-admin cc021c7 (전체 SHA는 evidence/admin-source-provenance.json). 원본 Git 객체의 routes/admin.ts·lib/admin.ts를 변경 없이 메모리에서 변환하여 실제 Express HTTP로 실행했다. requireAuth의 주체·Prisma·트랜잭션·날짜는 fixture다. 실제 JWT·MySQL·감사 로그 영속성·롤백 검증이 아니다.
 
 별도 **9개 중 7 통과 / 2 실패**, 종료 코드 1. 기존 보안 회귀 79개 및 소셜 24개와 합산하지 않는다.

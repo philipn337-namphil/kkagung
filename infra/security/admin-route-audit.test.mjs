@@ -9,20 +9,23 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const revision = 'cc021c7';
+const revision = process.env.ADMIN_AUDIT_REVISION || 'cc021c7';
 const require = createRequire(resolve(root, 'backend/package.json'));
 const ts = require('typescript');
 const express = require('express');
 const sourceHashes = {};
-const state = { role: 'ADMIN', status: 'ACTIVE', logs: [], writes: 0 };
+const state = { role: 'ADMIN', status: 'ACTIVE', logs: [], writes: 0, previous: {}, options: null };
 const environment = { NODE_ENV: process.env.NODE_ENV, APP_ENV: process.env.APP_ENV, ADMIN_ALLOWED_IP_CIDRS: process.env.ADMIN_ALLOWED_IP_CIDRS };
 const tx = {
-  adminSetting: { upsert: async () => { state.writes++; return {}; } },
+  adminSetting: {
+    findFirst: async ({ where }) => state.previous[where.settingKey] === undefined ? null : { settingValue: state.previous[where.settingKey] },
+    upsert: async () => { state.writes++; return {}; },
+  },
   adminAuditLog: { create: async ({ data }) => { state.logs.push(data); return { id: 91n }; } },
 };
 const prisma = {
   user: { findUnique: async () => ({ id: 1n, role: state.role, status: state.status }) },
-  $transaction: async operation => operation(tx),
+  $transaction: async (operation, options) => { state.options = options; return operation(tx); },
 };
 const response = {
   fail: (res, status, code, message) => res.status(status).json({ success: false, data: null, error: { code, message } }),
@@ -58,14 +61,15 @@ before(async () => {
   base = `http://127.0.0.1:${server.address().port}`;
 });
 beforeEach(() => {
-  state.role = 'ADMIN'; state.status = 'ACTIVE'; state.logs = []; state.writes = 0;
+  state.role = 'ADMIN'; state.status = 'ACTIVE'; state.logs = []; state.writes = 0; state.previous = {}; state.options = null;
   process.env.NODE_ENV = 'development'; process.env.APP_ENV = 'development'; process.env.ADMIN_ALLOWED_IP_CIDRS = '127.0.0.1';
 });
 after(async () => {
   if (server) await new Promise(done => server.close(done));
   for (const [key, value] of Object.entries(environment)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   const resolvedRevision = execFileSync('git', ['rev-parse', revision], { cwd: root, encoding: 'utf8' }).trim();
-  writeFileSync(resolve(root, 'infra/security/evidence/admin-source-provenance.json'), JSON.stringify({ revision: resolvedRevision, mode: 'unchanged Git admin routes and helper; real Express; mocked auth actor, Prisma transaction and date; NOT durable audit, JWT or DB integration', sourceHashes }, null, 2) + '\n');
+  const name = process.env.ADMIN_AUDIT_FIXED === '1' ? 'admin-fixed-source-provenance.json' : 'admin-source-provenance.json';
+  writeFileSync(resolve(root, 'infra/security/evidence', name), JSON.stringify({ revision: resolvedRevision, mode: 'unchanged Git admin routes and helper; real Express; mocked auth actor, Prisma transaction and date; NOT durable audit, JWT or DB integration', sourceHashes }, null, 2) + '\n');
 });
 const changeBadge = headers => fetch(base + '/api/v1/admin/settings/badge', {
   method: 'PUT', headers: { 'Content-Type': 'application/json', ...headers },
@@ -97,4 +101,26 @@ test('badge settings audit must contain previous values', async () => {
 test('invalid empty CIDR prefix must fail closed', () => {
   process.env.ADMIN_ALLOWED_IP_CIDRS = '127.0.0.1/';
   assert.equal(load('backend/src/lib/admin.ts').isAllowedAddress({ socket: { remoteAddress: '192.0.2.2' } }), false);
+});
+for (const entry of ['127.0.0.1/-1', '127.0.0.1/33', '127.0.0.1/1/2', '999.0.0.1/8', '127.0.0.1/1e1', '127.0.0.1,', '127.0.0.1,not-an-address']) {
+  test(`malformed allowlist is denied: ${entry}`, () => {
+    process.env.ADMIN_ALLOWED_IP_CIDRS = entry;
+    assert.equal(load('backend/src/lib/admin.ts').isAllowedAddress({ socket: { remoteAddress: '127.0.0.1' } }), false);
+  });
+}
+test('valid IPv4 subnet allows a member and denies a nonmember', () => {
+  process.env.ADMIN_ALLOWED_IP_CIDRS = '192.0.2.0/24';
+  const allowed = load('backend/src/lib/admin.ts').isAllowedAddress;
+  assert.equal(allowed({ socket: { remoteAddress: '::ffff:192.0.2.12' } }), true);
+  assert.equal(allowed({ socket: { remoteAddress: '192.0.3.12' } }), false);
+});
+test('badge audit uses effective defaults when there are no previous rows', async () => {
+  assert.equal((await changeBadge()).status, 200);
+  assert.deepEqual(state.logs[0].beforeValue, { popularMinUniqueHearts: 10, popularMinUniqueChatRequests: 5, windowDays: 30 });
+});
+test('badge audit reads existing values and requests serializable isolation', async () => {
+  state.previous = { BADGE_POPULAR_MIN_UNIQUE_HEARTS: 18, BADGE_POPULAR_MIN_UNIQUE_CHAT_REQUESTS: 8, BADGE_POPULAR_WINDOW_DAYS: 60 };
+  assert.equal((await changeBadge()).status, 200);
+  assert.deepEqual(state.logs[0].beforeValue, { popularMinUniqueHearts: 18, popularMinUniqueChatRequests: 8, windowDays: 60 });
+  assert.deepEqual(state.options, { isolationLevel: 'Serializable' });
 });

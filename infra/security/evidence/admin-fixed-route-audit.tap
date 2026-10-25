@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: USER cannot change admin settings despite stale ADMIN auth actor
+ok 1 - USER cannot change admin settings despite stale ADMIN auth actor
+  ---
+  duration_ms: 191.6162
+  type: 'test'
+  ...
+# Subtest: SUSPENDED admin is rejected
+ok 2 - SUSPENDED admin is rejected
+  ---
+  duration_ms: 9.6443
+  type: 'test'
+  ...
+# Subtest: WITHDRAWN admin is rejected
+ok 3 - WITHDRAWN admin is rejected
+  ---
+  duration_ms: 10.8207
+  type: 'test'
+  ...
+# Subtest: CHAT_RESTRICTED admin is rejected
+ok 4 - CHAT_RESTRICTED admin is rejected
+  ---
+  duration_ms: 5.1195
+  type: 'test'
+  ...
+# Subtest: production without an address allowlist denies admin writes
+ok 5 - production without an address allowlist denies admin writes
+  ---
+  duration_ms: 5.0656
+  type: 'test'
+  ...
+# Subtest: spoofed forwarded address does not bypass direct address allowlist
+ok 6 - spoofed forwarded address does not bypass direct address allowlist
+  ---
+  duration_ms: 4.856
+  type: 'test'
+  ...
+# Subtest: allowed ACTIVE admin writes settings and an audit entry in the callback
+ok 7 - allowed ACTIVE admin writes settings and an audit entry in the callback
+  ---
+  duration_ms: 13.0609
+  type: 'test'
+  ...
+# Subtest: badge settings audit must contain previous values
+ok 8 - badge settings audit must contain previous values
+  ---
+  duration_ms: 4.6454
+  type: 'test'
+  ...
+# Subtest: invalid empty CIDR prefix must fail closed
+ok 9 - invalid empty CIDR prefix must fail closed
+  ---
+  duration_ms: 1.425
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1/-1
+ok 10 - malformed allowlist is denied: 127.0.0.1/-1
+  ---
+  duration_ms: 0.4945
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1/33
+ok 11 - malformed allowlist is denied: 127.0.0.1/33
+  ---
+  duration_ms: 0.1932
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1/1/2
+ok 12 - malformed allowlist is denied: 127.0.0.1/1/2
+  ---
+  duration_ms: 0.1635
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 999.0.0.1/8
+ok 13 - malformed allowlist is denied: 999.0.0.1/8
+  ---
+  duration_ms: 2.3988
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1/1e1
+ok 14 - malformed allowlist is denied: 127.0.0.1/1e1
+  ---
+  duration_ms: 0.3123
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1,
+ok 15 - malformed allowlist is denied: 127.0.0.1,
+  ---
+  duration_ms: 0.2026
+  type: 'test'
+  ...
+# Subtest: malformed allowlist is denied: 127.0.0.1,not-an-address
+ok 16 - malformed allowlist is denied: 127.0.0.1,not-an-address
+  ---
+  duration_ms: 0.1824
+  type: 'test'
+  ...
+# Subtest: valid IPv4 subnet allows a member and denies a nonmember
+ok 17 - valid IPv4 subnet allows a member and denies a nonmember
+  ---
+  duration_ms: 0.4424
+  type: 'test'
+  ...
+# Subtest: badge audit uses effective defaults when there are no previous rows
+ok 18 - badge audit uses effective defaults when there are no previous rows
+  ---
+  duration_ms: 12.6594
+  type: 'test'
+  ...
+# Subtest: badge audit reads existing values and requests serializable isolation
+ok 19 - badge audit reads existing values and requests serializable isolation
+  ---
+  duration_ms: 5.6591
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3494.167
