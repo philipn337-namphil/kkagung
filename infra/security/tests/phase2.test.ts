@@ -259,8 +259,8 @@ describe('Phase 2 integration gates: implementation/infrastructure required', ()
     expect(response.status).toBe(403);
   });
   it.skip('private original photo denied before acceptance and allowed only to participants', () => {});
-  it.skip('blocked pair cannot create requests or send messages', () => {});
-  it.skip('admin setting changes create durable before/after audit entries', () => {});
+  // These two gates execute against real MySQL in live-db-audit.mjs via portable-db-drill.mjs:
+  // blocked pairs cannot create/accept requests or send messages; durable before/after admin audit.
   it.skip('disguised extension, invalid MIME, oversize and excessive pixels rejected; EXIF removed', () => {});
   it.skip('recommendation/heart/chat ownership, sanction and withdrawal restrictions enforced', () => {});
   it.skip('isolated DB/object/NAS restore meets measured RPO and RTO', () => {});

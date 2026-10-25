@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "1b02f98186fc7caa9f4ebf91f0b7a1b70b228c26",
-  "recordedAt": "2026-10-25T13:34:25.492Z",
+  "baselineCommit": "072053246c2481528fa8b6c56f90df0473a4cf8c",
+  "recordedAt": "2026-10-25T23:15:27.539Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "sourceHashes": {
@@ -15,7 +15,7 @@
     "backend/src/middleware/rateLimit.ts": "f904a80097e4c68115a8151cbc65cc301a61aebfd9b3760c05827c3865cbe1fb",
     "backend/prisma/schema.prisma": "f62bd49e2540ace82b87617f6b2c155a23e20427f6ae0bb4edb10321214984ea",
     "backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql": "0a1af2390c19a36cb48600b0b5fda08459b6c1d41754575641cf533037ec7d65",
-    "infra/security/tests/phase2.test.ts": "1a27dae5e25b2daf395e36d90216e374c825307bdfd88e8416f7b297c8fbf0b3",
+    "infra/security/tests/phase2.test.ts": "31936286c6ba266715304da20fa52843bdf71540f6b06be69a4e958663620dda",
     "infra/security/tests/frontend-config.test.ts": "81b7e56ed85d42421beff837064d2804e9d6497c89dcd6cdba3af39b9837d8d6",
     "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab"
   },
@@ -27,8 +27,8 @@
     "exitCode": 0,
     "passed": 73,
     "failed": 0,
-    "pending": 6,
-    "total": 79,
+    "pending": 4,
+    "total": 77,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -312,14 +312,6 @@
       },
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required private original photo denied before acceptance and allowed only to participants",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required blocked pair cannot create requests or send messages",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required admin setting changes create durable before/after audit entries",
         "status": "skipped"
       },
       {

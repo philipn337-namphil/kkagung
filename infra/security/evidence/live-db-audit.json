@@ -1,0 +1,12 @@
+{
+  "mode": "real HTTP and MySQL",
+  "passed": [
+    "current DB USER cannot change admin settings: 403",
+    "setting audit survives client reconnect and records actor plus before/after",
+    "invalid setting produces no DB audit or setting mutation",
+    "admin role revoked in DB invalidates already issued token: 403",
+    "admin suspended in DB invalidates already issued token: 403",
+    "both block directions reject new requests, acceptance and messages without DB writes"
+  ],
+  "failed": []
+}
