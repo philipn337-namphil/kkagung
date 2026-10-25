@@ -1,3 +1,5 @@
+// Encode untrusted values for HTML text, quoted attributes and textarea content.
+const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const API_BASE_URL = (window.API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 const API_PREFIX = `${API_BASE_URL}/api/v1`;
 const state = { token: sessionStorage.getItem('kkagung_token'), user: null, profile: null };
@@ -21,7 +23,7 @@ const api = {
   async restoreSession() {
     if (!state.token) return false;
     try { hydrate(await request('/me')); return true; }
-    catch { this.signOut(); return false; }
+    catch { this.clearSession(); return false; }
   },
   async signIn(email, password) {
     const data = await request('/auth/login', { method: 'POST', body: { email, password } });
@@ -43,7 +45,11 @@ const api = {
     state.profile = { ...savedProfile, birthDate: savedProfile.birthDate?.slice(0, 10) };
     return savedProfile;
   },
-  signOut() { state.token = null; state.user = null; state.profile = null; sessionStorage.removeItem('kkagung_token'); },
+  clearSession() { state.token = null; state.user = null; state.profile = null; sessionStorage.removeItem('kkagung_token'); },
+  async signOut() {
+    if (state.token) await request('/auth/logout', { method: 'POST', body: {} });
+    this.clearSession();
+  },
   async getRecommendations() { return demoProfiles; }
 };
 
@@ -66,12 +72,12 @@ function signup() { return layout(`<section class="auth"><div class="auth-title"
 function profile() {
   const p = state.profile || {};
   const pref = state.user?.preference || {};
-  return layout(`<section class="profile-page"><div><p class="eyebrow">MY PROFILE</p><h1>나를 소개해<br>주세요.</h1><p>필수 프로필과 선호 조건은 실제 서버에 안전하게 저장됩니다.</p></div><form id="profile-form" class="form-card profile-form"><label>표시 이름<input name="displayName" value="${p.displayName || ''}" maxlength="30" required></label><div class="two-cols"><label>생년월일<input name="birthDate" type="date" value="${p.birthDate || ''}" required></label><label>성별<select name="gender" required><option value="">선택</option><option value="MALE" ${p.gender === 'MALE' ? 'selected' : ''}>남성</option><option value="FEMALE" ${p.gender === 'FEMALE' ? 'selected' : ''}>여성</option><option value="OTHER" ${p.gender === 'OTHER' ? 'selected' : ''}>기타</option></select></label></div><div class="two-cols"><label>지역 코드<input name="regionCode" value="${p.regionCode || 'SEOUL_DONGDAEMUN'}" required></label><label>키(cm)<input name="heightCm" type="number" min="100" max="250" value="${p.heightCm || ''}" required></label></div><div class="two-cols"><label>직업<select name="jobCategory" required><option value="STUDENT" ${p.jobCategory === 'STUDENT' ? 'selected' : ''}>학생</option><option value="OFFICE_WORKER" ${p.jobCategory === 'OFFICE_WORKER' ? 'selected' : ''}>직장인</option><option value="FREELANCER" ${p.jobCategory === 'FREELANCER' ? 'selected' : ''}>프리랜서</option><option value="SELF_EMPLOYED" ${p.jobCategory === 'SELF_EMPLOYED' ? 'selected' : ''}>자영업</option><option value="OTHER" ${p.jobCategory === 'OTHER' ? 'selected' : ''}>기타</option></select></label><label>MBTI<input name="mbti" value="${p.mbti || ''}" maxlength="4" placeholder="INTJ" required></label></div><label>한 줄 소개<textarea name="intro" maxlength="200" placeholder="나를 가장 잘 표현하는 문장을 적어 주세요.">${p.intro || ''}</textarea></label><fieldset><legend>선호 조건</legend><div class="two-cols"><label>선호 성별<select name="preferredGender" required><option value="MALE" ${pref.preferredGender === 'MALE' ? 'selected' : ''}>남성</option><option value="FEMALE" ${pref.preferredGender === 'FEMALE' ? 'selected' : ''}>여성</option><option value="OTHER" ${pref.preferredGender === 'OTHER' ? 'selected' : ''}>기타</option></select></label><label>선호 지역<input name="preferredRegion" value="${pref.regionScope?.[0] || p.regionCode || 'SEOUL_DONGDAEMUN'}" required></label></div><div class="two-cols"><label>최소 나이<input name="minAge" type="number" min="19" max="99" value="${pref.minAge || 20}" required></label><label>최대 나이<input name="maxAge" type="number" min="19" max="99" value="${pref.maxAge || 35}" required></label></div></fieldset><p class="form-error" aria-live="polite"></p><button class="button" type="submit">프로필 저장하기</button></form></section>`, 'profile');
+  return layout(`<section class="profile-page"><div><p class="eyebrow">MY PROFILE</p><h1>나를 소개해<br>주세요.</h1><p>필수 프로필과 선호 조건은 실제 서버에 안전하게 저장됩니다.</p></div><form id="profile-form" class="form-card profile-form"><label>표시 이름<input name="displayName" value="${escapeHTML(p.displayName || '')}" maxlength="30" required></label><div class="two-cols"><label>생년월일<input name="birthDate" type="date" value="${escapeHTML(p.birthDate || '')}" required></label><label>성별<select name="gender" required><option value="">선택</option><option value="MALE" ${p.gender === 'MALE' ? 'selected' : ''}>남성</option><option value="FEMALE" ${p.gender === 'FEMALE' ? 'selected' : ''}>여성</option><option value="OTHER" ${p.gender === 'OTHER' ? 'selected' : ''}>기타</option></select></label></div><div class="two-cols"><label>지역 코드<input name="regionCode" value="${escapeHTML(p.regionCode || 'SEOUL_DONGDAEMUN')}" required></label><label>키(cm)<input name="heightCm" type="number" min="100" max="250" value="${escapeHTML(p.heightCm || '')}" required></label></div><div class="two-cols"><label>직업<select name="jobCategory" required><option value="STUDENT" ${p.jobCategory === 'STUDENT' ? 'selected' : ''}>학생</option><option value="OFFICE_WORKER" ${p.jobCategory === 'OFFICE_WORKER' ? 'selected' : ''}>직장인</option><option value="FREELANCER" ${p.jobCategory === 'FREELANCER' ? 'selected' : ''}>프리랜서</option><option value="SELF_EMPLOYED" ${p.jobCategory === 'SELF_EMPLOYED' ? 'selected' : ''}>자영업</option><option value="OTHER" ${p.jobCategory === 'OTHER' ? 'selected' : ''}>기타</option></select></label><label>MBTI<input name="mbti" value="${escapeHTML(p.mbti || '')}" maxlength="4" placeholder="INTJ" required></label></div><label>한 줄 소개<textarea name="intro" maxlength="200" placeholder="나를 가장 잘 표현하는 문장을 적어 주세요.">${escapeHTML(p.intro || '')}</textarea></label><fieldset><legend>선호 조건</legend><div class="two-cols"><label>선호 성별<select name="preferredGender" required><option value="MALE" ${pref.preferredGender === 'MALE' ? 'selected' : ''}>남성</option><option value="FEMALE" ${pref.preferredGender === 'FEMALE' ? 'selected' : ''}>여성</option><option value="OTHER" ${pref.preferredGender === 'OTHER' ? 'selected' : ''}>기타</option></select></label><label>선호 지역<input name="preferredRegion" value="${escapeHTML(pref.regionScope?.[0] || p.regionCode || 'SEOUL_DONGDAEMUN')}" required></label></div><div class="two-cols"><label>최소 나이<input name="minAge" type="number" min="19" max="99" value="${escapeHTML(pref.minAge || 20)}" required></label><label>최대 나이<input name="maxAge" type="number" min="19" max="99" value="${escapeHTML(pref.maxAge || 35)}" required></label></div></fieldset><p class="form-error" aria-live="polite"></p><button class="button" type="submit">프로필 저장하기</button></form></section>`, 'profile');
 }
 
-function home() { const name = state.profile?.displayName || state.user?.email?.split('@')[0] || '가궁이'; return layout(`<section class="home"><div class="home-intro"><p class="eyebrow">FOR YOU</p><h1>${name}님을 위한<br>오늘의 연결</h1><p>Phase 1에서는 추천 화면 목업을 제공합니다. 실제 운세·추천은 Phase 2 API에서 연결됩니다.</p><a href="#/profile" class="text-link">내 프로필 수정하기 →</a></div><div id="recommendations" class="profile-grid"><div class="loading">추천을 불러오는 중이에요…</div></div></section>`, 'home'); }
+function home() { const name = state.profile?.displayName || state.user?.email?.split('@')[0] || '가궁이'; return layout(`<section class="home"><div class="home-intro"><p class="eyebrow">FOR YOU</p><h1>${escapeHTML(name)}님을 위한<br>오늘의 연결</h1><p>Phase 1에서는 추천 화면 목업을 제공합니다. 실제 운세·추천은 Phase 2 API에서 연결됩니다.</p><a href="#/profile" class="text-link">내 프로필 수정하기 →</a></div><div id="recommendations" class="profile-grid"><div class="loading">추천을 불러오는 중이에요…</div></div></section>`, 'home'); }
 
-function renderCards(profiles) { document.querySelector('#recommendations').innerHTML = profiles.map(p => `<article class="person-card"><div class="person-image">${p.emoji}<span>추천</span></div><div class="person-info"><h2>${p.name} <small>${p.age}</small></h2><p class="district">⌖ ${p.district}</p><p>${p.bio}</p><div>${p.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}</div><button class="outline-button" data-name="${p.name}">관심 보내기</button></div></article>`).join(''); document.querySelectorAll('[data-name]').forEach(button => button.onclick = () => { button.textContent = '관심을 보냈어요 ✓'; button.disabled = true; }); }
+function renderCards(profiles) { document.querySelector('#recommendations').innerHTML = profiles.map(p => `<article class="person-card"><div class="person-image">${escapeHTML(p.emoji)}<span>추천</span></div><div class="person-info"><h2>${escapeHTML(p.name)} <small>${escapeHTML(p.age)}</small></h2><p class="district">⌖ ${escapeHTML(p.district)}</p><p>${escapeHTML(p.bio)}</p><div>${p.tags.map(tag => `<span class="tag">#${escapeHTML(tag)}</span>`).join('')}</div><button class="outline-button" data-name="${escapeHTML(p.name)}">관심 보내기</button></div></article>`).join(''); document.querySelectorAll('[data-name]').forEach(button => button.onclick = () => { button.textContent = '관심을 보냈어요 ✓'; button.disabled = true; }); }
 
 function showError(form, error) { form.querySelector('.form-error').textContent = error.message || '요청을 처리하지 못했습니다.'; }
 function bind(route) {
@@ -82,7 +88,11 @@ function bind(route) {
   const profileForm = document.querySelector('#profile-form');
   if (profileForm) profileForm.onsubmit = async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(profileForm)); try { await api.saveProfile({ profile: { displayName: data.displayName, birthDate: data.birthDate, gender: data.gender, regionCode: data.regionCode, heightCm: Number(data.heightCm), jobCategory: data.jobCategory, mbti: data.mbti.toUpperCase(), intro: data.intro || null }, preferences: { preferredGender: data.preferredGender, minAge: Number(data.minAge), maxAge: Number(data.maxAge), regionScope: [data.preferredRegion] } }); location.hash = '#/home'; } catch (error) { showError(profileForm, error); } };
   const logout = document.querySelector('#logout');
-  if (logout) logout.onclick = () => { api.signOut(); location.hash = '#/'; };
+  if (logout) logout.onclick = async () => {
+    logout.disabled = true;
+    try { await api.signOut(); location.hash = '#/'; }
+    catch { logout.textContent = '로그아웃 재시도'; logout.disabled = false; }
+  };
   if (route === '/home') api.getRecommendations().then(renderCards);
 }
 

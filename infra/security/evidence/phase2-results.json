@@ -1,18 +1,34 @@
 {
-  "baselineCommit": "7ace6274a0138a9f2d9f719e27f3ea322ad4fa50",
-  "recordedAt": "2026-10-23T08:59:17.072Z",
+  "baselineCommit": "15f46f8ce4d8fd1139c78cf8b26443d9d0c0dc8f",
+  "recordedAt": "2026-10-25T01:32:00.169Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
+  "sourceHashes": {
+    "backend/src/config.ts": "6a9fcda308a8ebf35e47304210d05cea627c0e2e0c1e6d831ee027d554554cfc",
+    "backend/src/middleware/auth.ts": "9a6ba42f0626a8ae9ea8461c5be5c3089eaf2a495293ec4fb27faf948d65cbcc",
+    "backend/src/routes/auth.ts": "acf909d6d40c9a3f2439b5c2287d442d30c20e32eec5e5c0a5aa87237ff9b14f",
+    "backend/src/routes/me.ts": "fd08feb8ef5c28cdb61242cc3c40ea69559763965e6289232f7f45eb226f6a0c",
+    "backend/src/app.ts": "d8e770ee3aa135913bf9789358e32eac821c6a3951e65a40f582a368b24dba16",
+    "frontend/app.js": "96c1249a87ee4c6f454c44b4a6e634dcb0d8208255a91543de55f0febebecc8f",
+    "frontend/server.js": "06b81f7395333a1da9307b9a46e98a8dfce9988d10bd80b62ccbce84a0d7f0b7",
+    "backend/src/lib/tokenHash.ts": "3c493c74a3b56412085e164795662a8b0775997b5554297e8128e227ca5f3439",
+    "backend/src/middleware/rateLimit.ts": "f904a80097e4c68115a8151cbc65cc301a61aebfd9b3760c05827c3865cbe1fb",
+    "backend/prisma/schema.prisma": "6361dbbf436a76a35f027cf69bacdee885d833e6f1e8fd51879ad4f40733e017",
+    "backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql": "0a1af2390c19a36cb48600b0b5fda08459b6c1d41754575641cf533037ec7d65",
+    "infra/security/tests/phase2.test.ts": "176d90d95f9f78498bf97669b90ac1a68817b37a1340e1726f2a88ad4d1b6b26",
+    "infra/security/tests/frontend-config.test.ts": "81b7e56ed85d42421beff837064d2804e9d6497c89dcd6cdba3af39b9837d8d6",
+    "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab"
+  },
   "build": {
     "exitCode": 0,
     "success": true
   },
   "tests": {
-    "exitCode": 1,
-    "passed": 7,
-    "failed": 16,
+    "exitCode": 0,
+    "passed": 72,
+    "failed": 0,
     "pending": 7,
-    "total": 30,
+    "total": 79,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -20,19 +36,123 @@
       },
       {
         "name": "frontend static file exposure (real server handler, loopback only) non-public file /server.js must not be served",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "frontend static file exposure (real server handler, loopback only) non-public file /.env.example must not be served",
-        "status": "failed"
+        "status": "passed"
       },
       {
-        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output",
-        "status": "failed"
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /.env must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /package.json must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /Dockerfile must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /%2eenv must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) non-public file /..%2fbackend%2f.env must not be served",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /index.html remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /app.js remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /styles.css remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend static file exposure (real server handler, loopback only) public asset /config.js remains available",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (<img src=x data-security-test=unescaped>)",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (\" autofocus onfocus=alert(1) x=\")",
+        "status": "passed"
+      },
+      {
+        "name": "frontend profile output encoding (renderer, no browser script execution) profile input must not create unescaped HTML in output (</textarea><script>alert(1)</script>)",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) APP_ENV production also selects the production TTL and registration gate",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) development also rejects empty short or known example key ()",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) development also rejects empty short or known example key (short-test-value)",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) development also rejects empty short or known example key (local_development_secret_change_before_production)",
+        "status": "passed"
       },
       {
         "name": "production config (isolated process, empty environment fixture) empty production JWT signing key must fail on startup",
-        "status": "failed"
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) D-03 config development override undefined resolves to 12h",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) D-03 config production override undefined resolves to 900s",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) D-03 config development override 1800s resolves to 1800s",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL  fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL 900 fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL 0s fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL -1h fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL not-a-duration fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "production config (isolated process, empty environment fixture) invalid TTL 900s\n fails before startup",
+        "status": "passed"
+      },
+      {
+        "name": "frontend server logout ordering removes local token only after successful server revocation (true)",
+        "status": "passed"
+      },
+      {
+        "name": "frontend server logout ordering removes local token only after successful server revocation (false)",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) missing token returns 401",
@@ -48,7 +168,39 @@
       },
       {
         "name": "existing authentication and profile routes (mock DB) wrong issuer and audience must return 401",
-        "status": "failed"
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) HS512 must be rejected when only HS256 is allowed",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) token without expiry must be rejected",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) malformed token subject returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) token without token ID returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) token without issued-at returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) future issued-at and overflowing subject return 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) raw token without Bearer scheme returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) deleted account returns 401 despite valid token",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) valid token accesses own profile",
@@ -56,39 +208,75 @@
       },
       {
         "name": "existing authentication and profile routes (mock DB) existing token of SUSPENDED account must be rejected",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) existing token of WITHDRAWN account must be rejected",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) unverified account must be rejected",
-        "status": "failed"
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) limited USER status RECOMMENDATION_BLOCKED does not prohibit all authenticated APIs",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) limited USER status CHAT_RESTRICTED does not prohibit all authenticated APIs",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) logged-out token must not remain usable",
-        "status": "failed"
+        "status": "passed"
       },
       {
-        "name": "existing authentication and profile routes (mock DB) registration must not accept client-only adult verification",
-        "status": "failed"
+        "name": "existing authentication and profile routes (mock DB) development-only registration retains fixture support (production gate tested separately)",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) withdrawn account must not obtain a new login token",
-        "status": "failed"
+        "status": "passed"
       },
       {
-        "name": "existing authentication and profile routes (mock DB) login token must respect 15 minute policy and required claims",
-        "status": "failed"
+        "name": "existing authentication and profile routes (mock DB) D-03 development login token uses 12 hour TTL",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) login token contains issuer audience and token ID",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) suspended account login is rejected",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) unverified account login is rejected",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) login failure bursts must eventually return 429 (50 local requests)",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) general API bursts must eventually return 429 (100 local requests)",
-        "status": "failed"
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) forwarded address headers cannot evade the direct-IP login quota",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) rate store failure refuses the request without a bypass",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) revocation storage failure refuses logout and leaves no false success",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) logout revokes only the submitted token and persists a digest",
+        "status": "passed"
       },
       {
         "name": "existing authentication and profile routes (mock DB) own profile writes must not follow a caller-supplied userId",
@@ -96,7 +284,7 @@
       },
       {
         "name": "existing authentication and profile routes (mock DB) error logging must redact sensitive values",
-        "status": "failed"
+        "status": "passed"
       },
       {
         "name": "admin middleware in isolation (not an implemented admin API) USER role is rejected with 403 by middleware",
@@ -104,7 +292,19 @@
       },
       {
         "name": "admin middleware in isolation (not an implemented admin API) revoked admin role must not trust stale ADMIN token",
-        "status": "failed"
+        "status": "passed"
+      },
+      {
+        "name": "admin middleware in isolation (not an implemented admin API) current DB admin role overrides stale USER role",
+        "status": "passed"
+      },
+      {
+        "name": "admin middleware in isolation (not an implemented admin API) suspended admin cannot pass middleware",
+        "status": "passed"
+      },
+      {
+        "name": "admin middleware in isolation (not an implemented admin API) non-active admin cannot pass middleware",
+        "status": "passed"
       },
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required real admin endpoint returns 403 for USER; current admin routes absent",
@@ -133,6 +333,18 @@
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required isolated DB/object/NAS restore meets measured RPO and RTO",
         "status": "skipped"
+      },
+      {
+        "name": "production login actually issues a 900 second JWT",
+        "status": "passed"
+      },
+      {
+        "name": "production-issued token passes real authentication middleware",
+        "status": "passed"
+      },
+      {
+        "name": "production registration refuses client-only adult verification without creating a user",
+        "status": "passed"
       }
     ]
   }

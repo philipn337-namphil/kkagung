@@ -5,6 +5,7 @@ const path = require('path');
 const root = __dirname;
 const mimeTypes = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.html': 'text/html; charset=utf-8' };
 const port = Number(process.env.PORT || 5173);
+const publicFiles = new Map([['/', 'index.html'], ['/index.html', 'index.html'], ['/app.js', 'app.js'], ['/styles.css', 'styles.css']]);
 
 http.createServer((request, response) => {
   const pathname = request.url.split('?')[0];
@@ -14,9 +15,9 @@ http.createServer((request, response) => {
     response.end(`window.API_BASE_URL = ${JSON.stringify(apiBaseUrl)};`);
     return;
   }
-  const requested = pathname === '/' ? '/index.html' : pathname;
-  const filePath = path.normalize(path.join(root, requested));
-  if (!filePath.startsWith(root) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+  const requested = publicFiles.get(pathname);
+  const filePath = requested ? path.join(root, requested) : null;
+  if (!filePath || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
     response.writeHead(404);
     response.end('Not found');
     return;

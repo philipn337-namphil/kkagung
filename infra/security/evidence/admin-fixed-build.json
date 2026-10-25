@@ -1,0 +1,21 @@
+{
+  "revision": "826f293ce054d4b7cd1c6062d0cbc8238a00b0a0",
+  "recordedAt": "2026-10-25T01:46:44.220Z",
+  "node": "v24.22.1",
+  "prismaClient": "6.19.3",
+  "generate": {
+    "exitCode": 0
+  },
+  "build": {
+    "exitCode": 0,
+    "command": "node <installed-typescript>/bin/tsc",
+    "cwd": "separate admin feature worktree/backend"
+  },
+  "schemaHash": "c1af9dd4f75026e4839cee80e1923b58396165f4cc7b2de2d43e440b574e648a",
+  "sourceHashes": {
+    "backend/src/routes/admin.ts": "d41ffde9719c2457501a7c9b2e9fc178cdeb77e15dc320b71aee475a420431da",
+    "backend/src/lib/admin.ts": "228133f6293a0c3e94a9f877619dc0ba9b205fc53c62d8af69af4b26fac29c2a"
+  },
+  "databaseApplied": false,
+  "liveDatabaseTested": false
+}
