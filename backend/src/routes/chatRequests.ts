@@ -178,8 +178,11 @@ chatRequestsRouter.post("/:requestId/accept", requireAuth, async (req, res, next
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { status: true } });
     if (!sender || (TARGET_UNAVAILABLE_STATUS as readonly string[]).includes(sender.status)) return fail(res, 403, "TARGET_UNAVAILABLE", "상대와 채팅을 시작할 수 없습니다.");
-    const blockedByTarget = await prisma.block.count({ where: { blockerId: senderId, targetUserId: receiverId } });
-    if (blockedByTarget > 0) return fail(res, 403, "BLOCKED_BY_TARGET", "상대가 차단했습니다.");
+    const blockedPair = await prisma.block.count({ where: { OR: [
+      { blockerId: senderId, targetUserId: receiverId },
+      { blockerId: receiverId, targetUserId: senderId },
+    ] } });
+    if (blockedPair > 0) return fail(res, 403, "BLOCKED_BY_TARGET", "차단 관계에서는 채팅을 시작할 수 없습니다.");
 
     const now = new Date();
     // 상태 전이와 방·참여자 생성을 한 트랜잭션으로 묶는다. 동시에 눌러도 한 번만 성공한다.
