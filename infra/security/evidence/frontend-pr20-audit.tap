@@ -1,0 +1,181 @@
+TAP version 13
+# Subtest: profile text and textarea escape HTML payload
+ok 1 - profile text and textarea escape HTML payload
+  ---
+  duration_ms: 10.9136
+  type: 'test'
+  ...
+# Subtest: admin API 401 is not converted to mock success
+ok 2 - admin API 401 is not converted to mock success
+  ---
+  duration_ms: 1.8884
+  type: 'test'
+  ...
+# Subtest: admin API 403 is not converted to mock success
+ok 3 - admin API 403 is not converted to mock success
+  ---
+  duration_ms: 0.9811
+  type: 'test'
+  ...
+# Subtest: admin API 404 is not converted to mock success
+ok 4 - admin API 404 is not converted to mock success
+  ---
+  duration_ms: 1.031
+  type: 'test'
+  ...
+# Subtest: admin API 409 is not converted to mock success
+ok 5 - admin API 409 is not converted to mock success
+  ---
+  duration_ms: 1.413
+  type: 'test'
+  ...
+# Subtest: admin API 429 is not converted to mock success
+ok 6 - admin API 429 is not converted to mock success
+  ---
+  duration_ms: 1.547
+  type: 'test'
+  ...
+# Subtest: server logout failure must retain token for revocation retry
+not ok 7 - server logout failure must retain token for revocation retry
+  ---
+  duration_ms: 4.3468
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:35:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:38:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: network failure must not report successful server logout
+not ok 8 - network failure must not report successful server logout
+  ---
+  duration_ms: 1.5187
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:41:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:42:3)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: public card renderer refuses an ORIGINAL_PRIVATE image type
+not ok 9 - public card renderer refuses an ORIGINAL_PRIVATE image type
+  ---
+  duration_ms: 1.831
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:44:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:47:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: untrusted card color must not create raw HTML
+not ok 10 - untrusted card color must not create raw HTML
+  ---
+  duration_ms: 1.2489
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:52:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: chat message request follows backend body field contract
+not ok 11 - chat message request follows backend body field contract
+  ---
+  duration_ms: 2.1011
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:54:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'Fixture message'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Fixture message'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:56:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: image status request follows implemented endpoint
+not ok 12 - image status request follows implemented endpoint
+  ---
+  duration_ms: 1.3972
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:58:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:60:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 6
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 427.5823
