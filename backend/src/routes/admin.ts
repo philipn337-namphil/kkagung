@@ -318,6 +318,17 @@ adminRouter.put("/settings/badge", async (req, res, next) => {
     const effectiveServiceDate = fortuneDateOf(serviceDate);
 
     const result = await prisma.$transaction(async (tx) => {
+      const previous = await Promise.all([
+        SETTING_BADGE_HEARTS, SETTING_BADGE_REQUESTS, SETTING_BADGE_WINDOW,
+      ].map((settingKey) => tx.adminSetting.findFirst({
+        where: { settingKey, effectiveServiceDate: { lte: effectiveServiceDate } },
+        orderBy: { effectiveServiceDate: "desc" }, select: { settingValue: true },
+      })));
+      const beforeValue = {
+        popularMinUniqueHearts: numberOrDefault(previous[0]?.settingValue, BADGE_DEFAULTS.popularMinUniqueHearts),
+        popularMinUniqueChatRequests: numberOrDefault(previous[1]?.settingValue, BADGE_DEFAULTS.popularMinUniqueChatRequests),
+        windowDays: numberOrDefault(previous[2]?.settingValue, BADGE_DEFAULTS.windowDays),
+      };
       for (const [settingKey, settingValue] of [
         [SETTING_BADGE_HEARTS, input.popularMinUniqueHearts],
         [SETTING_BADGE_REQUESTS, input.popularMinUniqueChatRequests],
@@ -334,10 +345,11 @@ adminRouter.put("/settings/badge", async (req, res, next) => {
         action: "SETTING_BADGE",
         targetType: "SETTING",
         targetId: BigInt(0),
+        beforeValue,
         afterValue: { popularMinUniqueHearts: input.popularMinUniqueHearts, popularMinUniqueChatRequests: input.popularMinUniqueChatRequests, windowDays },
       });
       return { auditLogId: log.id };
-    });
+    }, { isolationLevel: "Serializable" });
 
     return ok(res, {
       popularMinUniqueHearts: input.popularMinUniqueHearts,

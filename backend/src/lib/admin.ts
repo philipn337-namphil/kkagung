@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 import type { NextFunction, Request, Response } from "express";
 import type { Prisma } from "@prisma/client";
 import { fail } from "./response.js";
@@ -25,8 +26,18 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 export const isAllowedAddress = (req: Request) => {
   const raw = (process.env.ADMIN_ALLOWED_IP_CIDRS ?? "").trim();
   if (raw === "") return process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production";
-  const address = (req.socket.remoteAddress ?? "").replace(/^::ffff:/, "");
-  return raw.split(",").map((entry) => entry.trim()).filter((entry) => entry !== "").some((entry) => matchesEntry(address, entry));
+  const address = (req.socket.remoteAddress ?? "").replace(/^::ffff:/i, "");
+  const entries = raw.split(",").map((entry) => entry.trim());
+  // A malformed entry must never become /0 or be ignored beside a valid entry.
+  if (!isIP(address) || !entries.every(validEntry)) return false;
+  return entries.some((entry) => matchesEntry(address, entry));
+};
+
+const validEntry = (entry: string) => {
+  const parts = entry.split("/");
+  if (parts.length === 1) return isIP(parts[0]) !== 0;
+  return parts.length === 2 && isIP(parts[0]) === 4
+    && /^(0|[1-9]\d?)$/.test(parts[1]) && Number(parts[1]) <= 32;
 };
 
 const matchesEntry = (address: string, entry: string) => {
@@ -34,7 +45,7 @@ const matchesEntry = (address: string, entry: string) => {
   const [network, bitsRaw] = entry.split("/");
   const bits = Number(bitsRaw);
   const toInt = (value: string) => value.split(".").reduce((sum, part) => sum * 256 + Number(part), 0);
-  if (!/^\d+\.\d+\.\d+\.\d+$/.test(address) || !/^\d+\.\d+\.\d+\.\d+$/.test(network)) return false;
+  if (isIP(address) !== 4 || isIP(network) !== 4) return false;
   if (!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
   const mask = bits === 0 ? 0 : (-1 << (32 - bits)) >>> 0;
   return (toInt(address) & mask) === (toInt(network) & mask);
