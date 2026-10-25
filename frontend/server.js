@@ -21,6 +21,6 @@ http.createServer((request, response) => {
     response.end('Not found');
     return;
   }
-  response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream' });
+  response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
   fs.createReadStream(filePath).pipe(response);
 }).listen(port, () => console.log(`KKAGUNG frontend: http://localhost:${port}`));
