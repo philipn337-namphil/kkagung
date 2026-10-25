@@ -269,6 +269,19 @@ erDiagram
 | 선착순 원자적 차감 | `daily_refresh_inventory` 당일 행을 잠근 뒤 `remaining_count`를 차감하고 `refresh_tokens`를 생성한다. 기존 "선착순권 트랜잭션" 절의 순서를 그대로 따른다 |
 | 설정 변경 이력 보존 | `admin_settings`를 `(setting_key, effective_service_date)` 복합 PK로 두어 덮어쓰지 않는다 |
 
+## 2026-10-25 보안 저장소 추가
+
+사용자가 보안 담당의 DB 변경을 승인했다. 마이그레이션: `2026102501_security_token_and_rate_limits`.
+
+| 테이블 | 컬럼·제약 | 용도 |
+|---|---|---|
+| revoked_access_tokens | token_hash CHAR(64) PK, user_id BIGINT, expires_at DATETIME(3) 인덱스, created_at DATETIME(3) | 로그아웃한 JWT의 SHA-256 해시만 보관. 모든 보호 API 인증 시 확인 |
+| rate_limit_counters | key_hash CHAR(64) + window_start DATETIME(3) 복합 PK, expires_at DATETIME(3) 인덱스, count INT | 모든 인스턴스가 공유하는 고정 시간 창 요청 수. IP·이메일은 JWT 비밀키로 HMAC 처리하여 원문 미저장 |
+
+계정 삭제와 보안 기록 정리를 분리하므로 이 두 테이블은 사용자 FK를 두지 않는다. 토큰 재사용 방지를 위해 만료 전 폐기 기록을 삭제하면 안 된다. JWT 키 교체는 기존 토큰을 무효화하고 HMAC 카운터의 키 공간도 바꾸므로 제한 상태가 초기화된다. 운영은 같은 DB·키·동기화된 시스템 시간을 공유해야 한다.
+
+운영 정리 SQL은 [보안 저장소 운영 절차](../infra/security/SECURITY_STORAGE_20261025.md)를 따른다. 실제 DB 적용·복원·병렬 부하 검증은 별도 수행해야 하며 mock 시험으로 대체하지 않는다.
+
 ## 미결정 사항
 
 구현 전에 담당자 합의가 필요한 항목이다.
@@ -278,6 +291,6 @@ erDiagram
 | 취미 코드 목록 | `user_hobbies.hobby_code`, `preferred_hobbies.hobby_code`의 실제 코드 집합이 정해지지 않았다 | 프론트엔드 |
 | 거절·무시 후 재요청 | 현재 계약은 같은 서비스 날짜 재요청 불가. 다음 날 허용 여부가 미정이다 | 프론트엔드·보안 |
 | 차단 후 상세 프로필 노출 범위 | 원본 사진은 차단 즉시 중단으로 확정. 소개·취미 등 텍스트 노출 여부가 미정이다 | 보안·운영 |
-| 속도 제한 저장소 | 임계값 카운터를 DB에 둘지 별도 캐시에 둘지 미정이다. 테이블로 둘 경우 `rate_limit_counters` 추가가 필요하다 | 인프라·보안 |
+| 속도 제한 프록시 경계 | 저장소는 위 DB 카운터로 구현. 실제 프록시 뒤 클라이언트 주소 전달·신뢰 범위 및 부하 검증은 인프라 합의 필요 | 인프라·보안 |
 | 탈퇴 후 데이터 보관 기간 | `WITHDRAWN` 상태 유지 기간과 완전 삭제 기준이 미정이다 | 보안·운영 |
 | 관리자 원본 사진 검수 | 관리자에게 원본 조회 권한을 주지 않는 것이 현재 기준이다. 검수가 필요하면 별도 설계가 필요하다 | 보안·운영 |

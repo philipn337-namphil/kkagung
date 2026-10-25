@@ -28,6 +28,8 @@ const result = {
   sourceHashes: Object.fromEntries([
     'backend/src/config.ts', 'backend/src/middleware/auth.ts', 'backend/src/routes/auth.ts',
     'backend/src/routes/me.ts', 'backend/src/app.ts', 'frontend/app.js', 'frontend/server.js',
+    'backend/src/lib/tokenHash.ts', 'backend/src/middleware/rateLimit.ts', 'backend/prisma/schema.prisma',
+    'backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql',
     'infra/security/tests/phase2.test.ts', 'infra/security/tests/frontend-config.test.ts', 'infra/security/tests/production-auth.test.ts',
   ].map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])),
   build: { exitCode: build.status, success: build.status === 0 },

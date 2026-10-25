@@ -23,7 +23,7 @@ const api = {
   async restoreSession() {
     if (!state.token) return false;
     try { hydrate(await request('/me')); return true; }
-    catch { this.signOut(); return false; }
+    catch { this.clearSession(); return false; }
   },
   async signIn(email, password) {
     const data = await request('/auth/login', { method: 'POST', body: { email, password } });
@@ -45,7 +45,11 @@ const api = {
     state.profile = { ...savedProfile, birthDate: savedProfile.birthDate?.slice(0, 10) };
     return savedProfile;
   },
-  signOut() { state.token = null; state.user = null; state.profile = null; sessionStorage.removeItem('kkagung_token'); },
+  clearSession() { state.token = null; state.user = null; state.profile = null; sessionStorage.removeItem('kkagung_token'); },
+  async signOut() {
+    if (state.token) await request('/auth/logout', { method: 'POST', body: {} });
+    this.clearSession();
+  },
   async getRecommendations() { return demoProfiles; }
 };
 
@@ -84,7 +88,11 @@ function bind(route) {
   const profileForm = document.querySelector('#profile-form');
   if (profileForm) profileForm.onsubmit = async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(profileForm)); try { await api.saveProfile({ profile: { displayName: data.displayName, birthDate: data.birthDate, gender: data.gender, regionCode: data.regionCode, heightCm: Number(data.heightCm), jobCategory: data.jobCategory, mbti: data.mbti.toUpperCase(), intro: data.intro || null }, preferences: { preferredGender: data.preferredGender, minAge: Number(data.minAge), maxAge: Number(data.maxAge), regionScope: [data.preferredRegion] } }); location.hash = '#/home'; } catch (error) { showError(profileForm, error); } };
   const logout = document.querySelector('#logout');
-  if (logout) logout.onclick = () => { api.signOut(); location.hash = '#/'; };
+  if (logout) logout.onclick = async () => {
+    logout.disabled = true;
+    try { await api.signOut(); location.hash = '#/'; }
+    catch { logout.textContent = '로그아웃 재시도'; logout.disabled = false; }
+  };
   if (route === '/home') api.getRecommendations().then(renderCards);
 }
 

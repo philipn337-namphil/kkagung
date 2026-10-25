@@ -10,7 +10,8 @@ if (!jwtSecret || jwtSecret !== jwtSecret.trim() || Buffer.byteLength(jwtSecret,
   throw new Error("JWT_SECRET must be a private random value of at least 32 UTF-8 bytes, without surrounding whitespace.");
 }
 
-const jwtExpiresIn = process.env.JWT_EXPIRES_IN ?? (process.env.NODE_ENV === "production" ? "900s" : "12h");
+const production = process.env.NODE_ENV === "production" || process.env.APP_ENV === "production";
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN ?? (production ? "900s" : "12h");
 // Require explicit units: jsonwebtoken interprets a unitless string as milliseconds.
 const duration = /^([1-9]\d*)(s|m|h|d)$/.exec(jwtExpiresIn);
 const units: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
@@ -25,6 +26,7 @@ if (process.env.AUTH_JWT_ALGORITHM && process.env.AUTH_JWT_ALGORITHM !== "HS256"
 }
 
 export const config = {
+  production,
   port: Number(process.env.APP_PORT ?? 8080),
   jwtSecret,
   jwtExpiresIn: jwtExpiresIn as NonNullable<SignOptions["expiresIn"]>,

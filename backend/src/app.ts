@@ -7,10 +7,12 @@ import { fail, ok } from "./lib/response.js";
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 import { prisma } from "./prisma.js";
+import { rateLimit } from "./middleware/rateLimit.js";
 
 export const app = express();
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
+app.use("/api", rateLimit("api-ip", 90, 60));
 app.get("/health", async (_req, res, next) => { try { await prisma.$queryRaw`SELECT 1`; return ok(res, { status: "ok", database: "connected" }); } catch (e) { next(e); } });
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/me", meRouter);

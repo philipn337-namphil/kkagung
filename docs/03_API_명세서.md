@@ -16,13 +16,14 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 - Base URL: `/api/v1`
 - 인증: `Authorization: Bearer {token}`
-- 토큰 유효 기간은 `JWT_EXPIRES_IN` 환경별 설정값이며 기본은 개발 `12h`, 운영(`NODE_ENV=production`) `900s`다. 값은 `900s`, `15m`, `12h`처럼 양의 정수와 단위(s/m/h/d)로 지정한다.
+- 토큰 유효 기간은 `JWT_EXPIRES_IN` 환경별 설정값이며 기본은 개발 `12h`, 운영(`NODE_ENV=production` 또는 `APP_ENV=production`) `900s`다. 값은 `900s`, `15m`, `12h`처럼 양의 정수와 단위(s/m/h/d)로 지정한다.
 - JWT는 HS256만 허용한다. `sub`·`iat`·`exp`·`iss`·`aud`·`jti`를 발급하며 필수 클레임·서명·만료·발급자·대상을 검증한다. 기존 필수 클레임 없는 토큰은 401이므로 배포 후 다시 로그인해야 한다.
 - JWT 역할(`USER`/`ADMIN`)은 호환용 정보다. 권한은 매 요청 현재 DB의 계정 역할·상태·성인 인증 여부로 결정한다. 삭제 계정은 401, 정지·탈퇴 계정은 403, 성인 인증 미완료는 `403 ADULT_VERIFICATION_REQUIRED`다.
 - 로그인에서도 정지·탈퇴·성인 인증 미완료 계정을 차단한다. `RECOMMENDATION_BLOCKED`·`CHAT_RESTRICTED`는 전체 로그인 금지가 아니며 해당 기능 API에서 추가 제한해야 한다.
 - 관리자 계정으로 보호 API에 접근하려면 `ACTIVE` 상태여야 한다. 일반 사용자의 추천·채팅 부분 제재는 전체 인증 접근을 차단하지 않는다.
 - 시작 전 `JWT_SECRET`은 비공개 난수 문자열 최소 32 UTF-8 바이트로 설정한다. 빈 값·짧은 값·공개된 기본 예시 키는 개발/운영 모두 거부한다. 새 환경 변수와 기존 AUTH_ACCESS_TOKEN_TTL_SECONDS가 함께 있으면 인증 만료 설정은 `JWT_EXPIRES_IN`을 사용한다.
-- 로그아웃의 서버 토큰 무효화는 아직 구현되지 않았다. `jti` 발급만으로 토큰이 폐기되지 않으며 DB/세션 저장소 구현은 별도 작업이다. 가입의 `adultVerified` 임시 처리도 제공자 검증 구현 전까지 미해결이다.
+- 로그아웃 성공 시 해당 JWT의 SHA-256 해시를 DB 폐기 목록에 저장한다. 이후 동일 토큰은 401이며 다른 로그인 토큰은 유지한다. DB 장애 시 폐기 성공을 반환하지 않는다.
+- 운영(`NODE_ENV=production` 또는 `APP_ENV=production`) 신규 가입은 실제 성인 인증 제공자 연동 전까지 `403 ADULT_VERIFICATION_REQUIRED`로 거부한다. 개발 가입의 `adultVerified=true`는 테스트 전용이며 실제 성인 인증이 아니다. 어느 환경 변수든 production이면 기본 JWT TTL도 900s다.
 - 응답 시각은 ISO 8601 UTC(`Z`)로 전달하고 화면에서 한국 시간으로 변환한다.
 - 실제 사진 URL은 수락된 채팅방 참여자만 받을 수 있다.
 - `/admin` API는 `ADMIN` 역할만 호출한다.
@@ -88,8 +89,10 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 ### 속도 제한
 
-- 로그인 실패 반복, 하트·채팅 요청·메시지 전송, `/admin` 전체에 속도 제한을 적용한다.
-- 제한 초과 시 `429 TOO_MANY_REQUESTS`를 반환한다. 구체적 임계값은 보안·운영 담당과 확정한다.
+- DB 공용 고정 시간 창 카운터: `/api` 전체는 직접 연결 IP별 90회/60초, 로그인은 직접 연결 IP별 및 정규화 이메일별 각각 10회/900초, 가입은 IP별 10회/900초다. 로그인은 실패뿐 아니라 성공 시도도 센다.
+- 제한 초과 시 `429 TOO_MANY_REQUESTS`, `Retry-After`(초), `Cache-Control: no-store`를 반환한다. 저장소 장애 시 500이며 메모리 제한으로 우회하지 않는다.
+- `X-Forwarded-For`는 사용하지 않는다. 리버스 프록시 경유 시 현재는 프록시 주소 전체가 같은 한도를 공유한다. 인프라의 접속 경계 합의 전 임의로 trust proxy를 켜지 않는다. 향후 통합될 `/api/v1/admin`도 공통 제한을 거쳐야 한다.
+- 고정 시간 창 경계에서는 인접 두 창의 한도만큼 순간 요청이 허용될 수 있다. 실제 DB 부하·다중 인스턴스·동시 생성 경합 시험은 배포 전 필수다.
 
 ## 공통 응답 객체
 
@@ -221,7 +224,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 ### POST `/auth/register` ✅
 
-계정 생성·성인 인증 확인 후 토큰을 발급한다.
+개발 환경에서만 테스트 계정 생성 후 토큰을 발급한다. 운영은 제공자 기반 성인 인증 연동 전까지 사용자 생성 없이 403으로 차단한다.
 
 | 필드 | 타입 | 필수 | 비고 |
 |---|---|---|---|
@@ -239,7 +242,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 { "success": true, "data": { "token": "eyJhbGciOi...", "user": { "id": "7", "email": "me@example.com", "role": "USER" } }, "error": null }
 ```
 
-- 오류: `VALIDATION_ERROR` 400, `EMAIL_ALREADY_EXISTS` 409
+- 오류: `VALIDATION_ERROR` 400, `EMAIL_ALREADY_EXISTS` 409, `ADULT_VERIFICATION_REQUIRED` 403(운영 가입 차단), `TOO_MANY_REQUESTS` 429
 - 특별 규칙: 요청 본문의 `role`, `status`, `adultVerifiedAt`은 무시한다. 사용자가 관리자 권한을 만들 수 없다.
 - 반복 호출: 비멱등. 두 번째 호출은 `EMAIL_ALREADY_EXISTS`.
 
@@ -252,7 +255,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 
 성공 `200`: `register`와 같은 모양(`token`, `user`).
 
-- 오류: `VALIDATION_ERROR` 400, `INVALID_CREDENTIALS` 401, `SUSPENDED_USER` 403, `FORBIDDEN` 403(탈퇴), `ADULT_VERIFICATION_REQUIRED` 403(성인 인증 미완료), `TOO_MANY_REQUESTS` 429(속도 제한 구현 시)
+- 오류: `VALIDATION_ERROR` 400, `INVALID_CREDENTIALS` 401, `SUSPENDED_USER` 403, `FORBIDDEN` 403(탈퇴), `ADULT_VERIFICATION_REQUIRED` 403(성인 인증 미완료), `TOO_MANY_REQUESTS` 429
 - 특별 규칙: 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분하지 않고 둘 다 `INVALID_CREDENTIALS`로 응답한다. 가입 여부를 알아내지 못하게 하기 위함이다.
 - 반복 호출: 멱등(상태 변화는 `lastActiveAt` 갱신뿐).
 
@@ -261,11 +264,12 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 본문 없음. 성공 `200`:
 
 ```json
-{ "success": true, "data": { "message": "클라이언트 토큰을 삭제해 로그아웃합니다." }, "error": null }
+{ "success": true, "data": { "message": "로그아웃되었습니다. 클라이언트 토큰을 삭제해 주세요." }, "error": null }
 ```
 
-- 특별 규칙: 서버는 토큰을 무효화하지 않는다. 클라이언트가 저장소에서 토큰을 지운다. 즉시 무효화가 필요하면 토큰 차단 목록 도입을 백엔드·보안 담당이 합의해야 한다.
-- 반복 호출: 멱등.
+- 특별 규칙: 인증된 토큰만 폐기한다. 원문 토큰은 저장하지 않는다. 프론트는 서버 성공 응답 후 로컬 토큰을 삭제하며 저장 실패 시 재시도한다.
+- 오류: `UNAUTHORIZED` 401(누락·만료·이미 폐기), `FORBIDDEN` 403(계정 상태), `TOO_MANY_REQUESTS` 429, 저장소 장애 500.
+- 반복 호출: 첫 요청 성공 후 동일 토큰 재호출은 401. 폐기 상태는 유지된다.
 
 ## 2. 테스트 계정 (개발·시연 전용)
 

@@ -2,6 +2,25 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model RevokedAccessToken {
+  tokenHash String   @id @map("token_hash") @db.Char(64)
+  userId    BigInt   @map("user_id")
+  expiresAt DateTime @map("expires_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  @@index([expiresAt])
+  @@map("revoked_access_tokens")
+}
+
+model RateLimitCounter {
+  keyHash     String   @map("key_hash") @db.Char(64)
+  windowStart DateTime @map("window_start") @db.DateTime(3)
+  expiresAt   DateTime @map("expires_at") @db.DateTime(3)
+  count       Int      @default(1)
+  @@id([keyHash, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")

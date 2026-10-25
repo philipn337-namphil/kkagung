@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { config } from "../config.js";
 import { fail } from "../lib/response.js";
 import { prisma } from "../prisma.js";
+import { tokenHash } from "../lib/tokenHash.js";
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   const token = /^Bearer\s+(\S+)$/i.exec(req.header("authorization") ?? "")?.[1];
@@ -22,6 +23,8 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     if (userId > 9223372036854775807n) return fail(res, 401, "UNAUTHORIZED", "유효하지 않은 토큰입니다.");
   } catch { return fail(res, 401, "UNAUTHORIZED", "유효하지 않은 토큰입니다."); }
   try {
+    const revoked = await prisma.revokedAccessToken.findUnique({ where: { tokenHash: tokenHash(token) }, select: { tokenHash: true } });
+    if (revoked) return fail(res, 401, "UNAUTHORIZED", "로그아웃된 토큰입니다.");
     const user = await prisma.user.findUnique({
       where: { id: userId }, select: { id: true, role: true, status: true, adultVerifiedAt: true },
     });

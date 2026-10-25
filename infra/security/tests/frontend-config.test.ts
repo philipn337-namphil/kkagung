@@ -58,6 +58,16 @@ describe('frontend profile output encoding (renderer, no browser script executio
 });
 
 describe('production config (isolated process, empty environment fixture)', () => {
+  it('APP_ENV production also selects the production TTL and registration gate', () => {
+    const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
+    const env = { ...process.env, NODE_ENV: 'development', APP_ENV: 'production', JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(), DOTENV_CONFIG_PATH: 'does-not-exist.env' };
+    delete env.JWT_EXPIRES_IN;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', `const {config}=await import(${JSON.stringify(configUrl)}); console.log(JSON.stringify({production:config.production,ttl:config.jwtExpiresIn}));`], {
+      cwd: mkdtempSync(resolve(tmpdir(), 'kkagung-app-env-')), env, encoding: 'utf8', timeout: 10000,
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual({ production: true, ttl: '900s' });
+  });
   it.each(['', 'short-test-value', 'local_development_secret_change_before_production'])('development also rejects empty short or known example key (%s)', secret => {
     const configUrl = pathToFileURL(resolve(root, 'backend/dist/src/config.js')).href;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(configUrl)})`], {
@@ -101,5 +111,24 @@ describe('production config (isolated process, empty environment fixture)', () =
       encoding: 'utf8', timeout: 10000,
     });
     expect(result.status).not.toBe(0);
+  });
+});
+
+describe('frontend server logout ordering', () => {
+  it.each([true, false])('removes local token only after successful server revocation (%s)', async success => {
+    const removed: string[] = [];
+    const calls: string[] = [];
+    const sandbox: any = {
+      window: { addEventListener: () => {}, scrollTo: () => {} },
+      sessionStorage: { getItem: () => 'synthetic-fixture', removeItem: (key: string) => removed.push(key) },
+      location: { hash: '#/' },
+      document: { querySelector: () => ({ innerHTML: '', querySelector: () => null }) },
+      fetch: async (url: string) => { calls.push(url); return { ok: success, json: async () => ({ success, data: {}, error: { message: 'Synthetic failure' } }) }; },
+    };
+    const source = readFileSync(resolve(root, 'frontend/app.js'), 'utf8');
+    const operation = vm.runInNewContext(source + '\napi.signOut();', sandbox);
+    if (success) { await operation; expect(removed).toEqual(['kkagung_token']); }
+    else { await expect(operation).rejects.toThrow('Synthetic failure'); expect(removed).toEqual([]); }
+    expect(calls).toEqual(['http://localhost:8080/api/v1/auth/logout']);
   });
 });

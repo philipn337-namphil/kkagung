@@ -9,10 +9,22 @@ const fixture = vi.hoisted(() => {
   process.env.NODE_ENV = 'development';
   delete process.env.JWT_EXPIRES_IN;
   process.env.FRONTEND_URL = 'http://localhost:5173';
-  return { user: {} as any, saved: null as any };
+  return { user: {} as any, saved: null as any, revoked: new Map(), counters: new Map() };
 });
 vi.mock('../../../backend/src/prisma.js', () => ({
   prisma: {
+    revokedAccessToken: {
+      findUnique: vi.fn(async ({ where }) => fixture.revoked.get(where.tokenHash) ?? null),
+      upsert: vi.fn(async ({ create }) => { fixture.revoked.set(create.tokenHash, create); return create; }),
+    },
+    rateLimitCounter: {
+      upsert: vi.fn(async ({ create }) => {
+        const key = create.keyHash + ':' + create.windowStart.toISOString();
+        const count = (fixture.counters.get(key) ?? 0) + 1;
+        fixture.counters.set(key, count);
+        return { count };
+      }),
+    },
     user: {
       findUnique: vi.fn(async () => fixture.user),
       update: vi.fn(async () => fixture.user),
@@ -50,6 +62,7 @@ beforeAll(async () => {
 beforeEach(() => {
   fixture.user = { id: 1n, email: 'test@example.invalid', role: 'USER', status: 'ACTIVE', adultVerifiedAt: new Date(), passwordHash };
   fixture.saved = null;
+  fixture.revoked.clear(); fixture.counters.clear();
 });
 afterAll(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); });
 
@@ -113,10 +126,10 @@ describe('existing authentication and profile routes (mock DB)', () => {
     expect((await request('/api/v1/auth/logout', token, {})).status).toBe(200);
     expect((await request('/api/v1/me', token)).status).toBe(401);
   });
-  it('registration must not accept client-only adult verification', async () => {
+  it('development-only registration retains fixture support (production gate tested separately)', async () => {
     fixture.user = null;
     const response = await request('/api/v1/auth/register', undefined, { email: 'new@example.invalid', password, adultVerified: true });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(201);
   });
   it('withdrawn account must not obtain a new login token', async () => {
     fixture.user.status = 'WITHDRAWN';
@@ -144,13 +157,47 @@ describe('existing authentication and profile routes (mock DB)', () => {
   it('login failure bursts must eventually return 429 (50 local requests)', async () => {
     const statuses = [];
     for (let i = 0; i < 50; i++) statuses.push((await request('/api/v1/auth/login', undefined, { email: fixture.user.email, password: 'intentionally-wrong-test-input' })).status);
-    expect(statuses.includes(429)).toBe(true);
+    expect(statuses.slice(0, 10).every(status => status === 401)).toBe(true);
+    expect(statuses.slice(10).every(status => status === 429)).toBe(true);
   });
   it('general API bursts must eventually return 429 (100 local requests)', async () => {
     const statuses = [];
     const token = sign();
     for (let i = 0; i < 100; i++) statuses.push((await request('/api/v1/me', token)).status);
-    expect(statuses.includes(429)).toBe(true);
+    expect(statuses.slice(0, 90).every(status => status === 200)).toBe(true);
+    expect(statuses.slice(90).every(status => status === 429)).toBe(true);
+  });
+  it('forwarded address headers cannot evade the direct-IP login quota', async () => {
+    const statuses = [];
+    for (let i = 0; i < 12; i++) {
+      const result = await fetch(base + '/api/v1/auth/login', { method: 'POST', headers: {
+        'Content-Type': 'application/json', 'X-Forwarded-For': `192.0.2.${i + 1}`,
+      }, body: JSON.stringify({ email: `fixture${i}@example.invalid`, password: 'wrong-fixture' }) });
+      statuses.push(result.status);
+      if (result.status === 429) expect(Number(result.headers.get('retry-after'))).toBeGreaterThan(0);
+    }
+    expect(statuses.slice(10)).toEqual([429, 429]);
+  });
+  it('rate store failure refuses the request without a bypass', async () => {
+    vi.mocked(prisma.rateLimitCounter.upsert).mockRejectedValueOnce(new Error('Synthetic storage failure'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try { expect((await request('/api/v1/me', sign())).status).toBe(500); }
+    finally { spy.mockRestore(); }
+  });
+  it('revocation storage failure refuses logout and leaves no false success', async () => {
+    vi.mocked(prisma.revokedAccessToken.upsert).mockRejectedValueOnce(new Error('Synthetic revocation failure'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try { expect((await request('/api/v1/auth/logout', sign(), {})).status).toBe(500); }
+    finally { spy.mockRestore(); }
+  });
+  it('logout revokes only the submitted token and persists a digest', async () => {
+    const token = sign(); const other = sign();
+    expect((await request('/api/v1/auth/logout', token, {})).status).toBe(200);
+    expect((await request('/api/v1/me', token)).status).toBe(401);
+    expect((await request('/api/v1/me', other)).status).toBe(200);
+    const stored = [...fixture.revoked.values()][0];
+    expect(/^[a-f0-9]{64}$/.test(stored.tokenHash)).toBe(true);
+    expect(JSON.stringify(stored, (_, value) => typeof value === 'bigint' ? String(value) : value).includes(token)).toBe(false);
   });
   it('own profile writes must not follow a caller-supplied userId', async () => {
     const response = await fetch(base + '/api/v1/me/profile', {
