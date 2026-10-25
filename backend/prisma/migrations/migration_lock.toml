@@ -1,0 +1,2 @@
+# Managed migration provider. Never change this without a migration plan.
+provider = "mysql"

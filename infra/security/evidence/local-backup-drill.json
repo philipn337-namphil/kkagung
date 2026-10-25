@@ -1,0 +1,25 @@
+{
+  "recordedAt": "2026-10-25T04:16:31.982Z",
+  "mode": "synthetic local file encryption roundtrip only; NOT MySQL/object storage restore",
+  "algorithm": "AES-256-GCM",
+  "checks": {
+    "encryptedContent": true,
+    "exactRoundtrip": true,
+    "sha256Match": true,
+    "roleAndStatusPreserved": true,
+    "revocationRecordPreserved": true,
+    "tamperingRejected": true,
+    "truncationRejected": true,
+    "invalidTagRejected": true
+  },
+  "fixtureCounts": {
+    "users": 2,
+    "revokedTokens": 1,
+    "objects": 1,
+    "audit": 1
+  },
+  "durationMs": 26,
+  "realRpoMeasured": false,
+  "realRtoMeasured": false,
+  "realAccessControlTested": false
+}

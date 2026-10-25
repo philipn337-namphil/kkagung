@@ -1,0 +1,8 @@
+{
+  "revision": "cc021c7a2a723d2d9d440797ce5fc51a3a424605",
+  "mode": "unchanged Git admin routes and helper; real Express; mocked auth actor, Prisma transaction and date; NOT durable audit, JWT or DB integration",
+  "sourceHashes": {
+    "backend/src/routes/admin.ts": "8acd596e1b5642243f13e9cf1279070a79367117290b31c3560e02a427f962bf",
+    "backend/src/lib/admin.ts": "48315b32e6807158a121d4f22107d2f5a8dcb7a30e876c7c48eca636452e1eb0"
+  }
+}

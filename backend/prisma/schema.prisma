@@ -2,6 +2,25 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model RevokedAccessToken {
+  tokenHash String   @id @map("token_hash") @db.Char(64)
+  userId    BigInt   @map("user_id")
+  expiresAt DateTime @map("expires_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  @@index([expiresAt])
+  @@map("revoked_access_tokens")
+}
+
+model RateLimitCounter {
+  keyHash     String   @map("key_hash") @db.Char(64)
+  windowStart DateTime @map("window_start") @db.DateTime(3)
+  expiresAt   DateTime @map("expires_at") @db.DateTime(3)
+  count       Int      @default(1)
+  @@id([keyHash, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
+}
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -59,6 +78,75 @@ enum MilitaryService {
   ANY
 }
 
+enum ImageType {
+  ORIGINAL_PRIVATE
+  AI_PUBLIC
+  BLURRED_PUBLIC
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum FortuneGrade {
+  BAD
+  NORMAL
+  GOOD
+  GREAT
+}
+
+enum RecommendationSource {
+  INITIAL
+  REFRESH
+}
+
+enum RefreshTokenStatus {
+  AVAILABLE
+  USED
+  EXPIRED
+}
+
+enum ChatRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  IGNORED
+}
+
+enum ChatRequestSource {
+  RECOMMENDATION
+  RECEIVED_HEART
+}
+
+enum ReportTargetType {
+  USER
+  MESSAGE
+}
+
+enum ReportReasonCode {
+  SPAM
+  ABUSE
+  SEXUAL
+  FAKE_PROFILE
+  UNDERAGE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
 model User {
   id              BigInt       @id @default(autoincrement())
   email           String       @unique @db.VarChar(255)
@@ -71,6 +159,20 @@ model User {
   updatedAt       DateTime     @updatedAt @map("updated_at")
   profile         UserProfile?
   preference      UserPreference?
+  profileImages   ProfileImage[]
+  dailyFortunes   DailyFortune[]
+  recommendationsSeen RecommendationItem[] @relation("RecommendationViewer")
+  recommendedToOthers RecommendationItem[] @relation("RecommendationTarget")
+  refreshTokens   RefreshToken[]
+  blocksMade      Block[]         @relation("BlockBlocker")
+  blocksReceived  Block[]         @relation("BlockTarget")
+  heartsSent      Heart[]         @relation("HeartSender")
+  heartsReceived  Heart[]         @relation("HeartReceiver")
+  chatRequestsSent     ChatRequest[] @relation("ChatRequestSender")
+  chatRequestsReceived ChatRequest[] @relation("ChatRequestReceiver")
+  chatRoomMembers ChatRoomMember[]
+  chatMessages    ChatMessage[]
+  reportsMade     Report[]        @relation("ReportReporter")
   @@map("users")
   @@index([status, lastActiveAt])
 }
@@ -111,4 +213,217 @@ model UserPreference {
   militaryService MilitaryService @default(ANY) @map("military_service")
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@map("user_preferences")
+}
+
+model ProfileImage {
+  id                BigInt            @id @default(autoincrement())
+  userId            BigInt            @map("user_id")
+  slot              Int               @db.TinyInt
+  imageType         ImageType         @map("image_type")
+  objectKey         String            @map("object_key") @db.VarChar(255)
+  generationStatus  GenerationStatus  @default(PENDING) @map("generation_status")
+  byteSize          Int               @map("byte_size")
+  width             Int               @db.SmallInt
+  height            Int               @db.SmallInt
+  processedAt       DateTime?         @map("processed_at")
+  failedReasonCode  String?           @map("failed_reason_code") @db.VarChar(40)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("profile_images")
+  @@unique([userId, slot, imageType])
+  @@index([userId, imageType, generationStatus])
+}
+
+model DailyFortune {
+  id            BigInt        @id @default(autoincrement())
+  userId        BigInt        @map("user_id")
+  fortuneDate   DateTime      @map("fortune_date") @db.Date
+  grade         FortuneGrade
+  score         Int           @db.UnsignedTinyInt
+  cardCount     Int           @map("card_count") @db.TinyInt
+  message       String        @db.VarChar(200)
+  openedAt      DateTime?     @map("opened_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("daily_fortunes")
+  @@unique([userId, fortuneDate])
+}
+
+model RecommendationItem {
+  id                 BigInt                @id @default(autoincrement())
+  viewerId           BigInt                @map("viewer_id")
+  targetUserId       BigInt                @map("target_user_id")
+  recommendationDate DateTime              @map("recommendation_date") @db.Date
+  sourceType         RecommendationSource  @map("source_type")
+  displayOrder       Int                   @map("display_order") @db.TinyInt
+  reasonCode         String                @map("reason_code") @db.VarChar(40)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  viewer             User                  @relation("RecommendationViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  target             User                  @relation("RecommendationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  @@map("recommendation_items")
+  @@unique([viewerId, targetUserId, recommendationDate])
+  @@index([viewerId, recommendationDate, sourceType])
+}
+
+model DailyRefreshInventory {
+  serviceDate         DateTime        @id @map("service_date") @db.Date
+  totalCount          Int             @map("total_count")
+  remainingCount      Int             @map("remaining_count")
+  grantedCount        Int             @default(0) @map("granted_count")
+  configuredByAdminId BigInt?         @map("configured_by_admin_id")
+  configuredAt        DateTime?       @map("configured_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  refreshTokens       RefreshToken[]
+  @@map("daily_refresh_inventory")
+}
+
+model RefreshToken {
+  id          BigInt                 @id @default(autoincrement())
+  userId      BigInt                 @map("user_id")
+  tokenDate   DateTime               @map("token_date") @db.Date
+  status      RefreshTokenStatus     @default(AVAILABLE)
+  expiresAt   DateTime               @map("expires_at")
+  usedAt      DateTime?              @map("used_at")
+  grantedRank Int?                   @map("granted_rank")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory   DailyRefreshInventory  @relation(fields: [tokenDate], references: [serviceDate], onDelete: Cascade)
+  @@map("refresh_tokens")
+  @@unique([userId, tokenDate])
+  @@index([tokenDate, grantedRank])
+}
+
+model Block {
+  id           BigInt   @id @default(autoincrement())
+  blockerId    BigInt   @map("blocker_id")
+  targetUserId BigInt   @map("target_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  blocker      User     @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  target       User     @relation("BlockTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  @@map("blocks")
+  @@unique([blockerId, targetUserId])
+  @@index([targetUserId, blockerId])
+}
+
+model Heart {
+  id          BigInt    @id @default(autoincrement())
+  senderId    BigInt    @map("sender_id")
+  receiverId  BigInt    @map("receiver_id")
+  canceledAt  DateTime? @map("canceled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  sender      User      @relation("HeartSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User      @relation("HeartReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  @@map("hearts")
+  @@unique([senderId, receiverId])
+  @@index([receiverId, createdAt])
+  @@index([receiverId, canceledAt, id(sort: Desc)])
+}
+
+model ChatRequest {
+  id          BigInt             @id @default(autoincrement())
+  senderId    BigInt             @map("sender_id")
+  receiverId  BigInt             @map("receiver_id")
+  message     String             @db.VarChar(200)
+  status      ChatRequestStatus  @default(PENDING)
+  sourceType  ChatRequestSource  @map("source_type")
+  serviceDate DateTime           @map("service_date") @db.Date
+  respondedAt DateTime?          @map("responded_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  sender      User               @relation("ChatRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User               @relation("ChatRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  room        ChatRoom?
+  @@map("chat_requests")
+  @@index([receiverId, status, createdAt])
+  @@index([receiverId, status, id(sort: Desc)])
+  @@index([senderId, status, id(sort: Desc)])
+  @@index([senderId, receiverId, serviceDate])
+}
+
+model ChatRoom {
+  id            BigInt            @id @default(autoincrement())
+  chatRequestId BigInt            @unique @map("chat_request_id")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  chatRequest   ChatRequest       @relation(fields: [chatRequestId], references: [id], onDelete: Cascade)
+  members       ChatRoomMember[]
+  messages      ChatMessage[]
+  @@map("chat_rooms")
+}
+
+model ChatRoomMember {
+  id                BigInt    @id @default(autoincrement())
+  roomId            BigInt    @map("room_id")
+  userId            BigInt    @map("user_id")
+  lastReadMessageId BigInt?   @map("last_read_message_id")
+  lastReadAt        DateTime? @map("last_read_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  room              ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("chat_room_members")
+  @@unique([roomId, userId])
+  @@index([userId, roomId])
+}
+
+model ChatMessage {
+  id              BigInt   @id @default(autoincrement())
+  roomId          BigInt   @map("room_id")
+  senderId        BigInt   @map("sender_id")
+  body            String   @db.VarChar(1000)
+  clientMessageId String?  @map("client_message_id") @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at")
+  room            ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender          User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  @@map("chat_messages")
+  @@unique([roomId, senderId, clientMessageId])
+  @@index([roomId, id(sort: Desc)])
+}
+
+model Report {
+  id               BigInt            @id @default(autoincrement())
+  reporterId       BigInt            @map("reporter_id")
+  targetType       ReportTargetType  @map("target_type")
+  targetId         BigInt            @map("target_id")
+  reasonCode       ReportReasonCode  @map("reason_code")
+  detail           String?           @db.VarChar(500)
+  status           ReportStatus      @default(PENDING)
+  handledByAdminId BigInt?           @map("handled_by_admin_id")
+  handledAt        DateTime?         @map("handled_at")
+  resultNote       String?           @map("result_note") @db.VarChar(500)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  reporter         User              @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  @@map("reports")
+  @@index([status, createdAt])
+  @@index([reporterId, targetType, targetId, reasonCode, status])
+}
+
+model AdminSetting {
+  settingKey           String   @map("setting_key") @db.VarChar(60)
+  effectiveServiceDate DateTime @map("effective_service_date") @db.Date
+  settingValue         Json     @map("setting_value")
+  updatedByAdminId     BigInt   @map("updated_by_admin_id")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  @@map("admin_settings")
+  @@id([settingKey, effectiveServiceDate])
+}
+
+model AdminAuditLog {
+  id          BigInt      @id @default(autoincrement())
+  adminId     BigInt      @map("admin_id")
+  requestId   String      @map("request_id") @db.VarChar(64)
+  action      String      @db.VarChar(60)
+  targetType  String      @map("target_type") @db.VarChar(30)
+  targetId    BigInt      @map("target_id")
+  beforeValue Json?       @map("before_value")
+  afterValue  Json?       @map("after_value")
+  result      AuditResult
+  createdAt   DateTime    @default(now()) @map("created_at")
+  @@map("admin_audit_logs")
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
 }
