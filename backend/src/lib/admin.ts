@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { Prisma } from "@prisma/client";
 import { fail } from "./response.js";
 import { prisma } from "../prisma.js";
+import { clientIp } from "./clientIp.js";
 
 /**
  * 토큰의 역할 값만 믿지 않고, 요청 시점의 DB 역할과 계정 상태를 다시 확인한다.
@@ -26,7 +27,7 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 export const isAllowedAddress = (req: Request) => {
   const raw = (process.env.ADMIN_ALLOWED_IP_CIDRS ?? "").trim();
   if (raw === "") return process.env.APP_ENV !== "production" && process.env.NODE_ENV !== "production";
-  const address = (req.socket.remoteAddress ?? "").replace(/^::ffff:/i, "");
+  const address = clientIp(req);
   const entries = raw.split(",").map((entry) => entry.trim());
   // A malformed entry must never become /0 or be ignored beside a valid entry.
   if (!isIP(address) || !entries.every(validEntry)) return false;
