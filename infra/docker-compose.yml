@@ -18,6 +18,42 @@ services:
       timeout: 5s
       retries: 20
 
+  # NCP Object Storage 는 S3 호환이다. 로컬에서는 같은 프로토콜을 제공하는 SeaweedFS 를 쓰고,
+  # Phase 3 에서는 엔드포인트와 자격증명만 NCP 값으로 바꾼다. 애플리케이션 코드는 그대로 둔다.
+  # (MinIO 와 LocalStack 은 2026-10 기준 공개 이미지를 받을 수 없어 쓰지 않는다.)
+  objectstorage:
+    image: chrislusf/seaweedfs:4.50
+    container_name: kkagung-objectstorage
+    restart: unless-stopped
+    environment:
+      ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-kkagung_local}
+      # 로컬 전용 기본값이다. 운영은 이 Compose 를 쓰지 않고 NCP 자격증명을 주입한다.
+      SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-kkagung_local_secret}
+      BUCKET_PUBLIC: ${OBJECT_STORAGE_BUCKET_PUBLIC:-kkagung-images-public}
+    # 자격증명을 저장소에 두지 않으려고, 기동할 때 템플릿을 환경변수로 치환해 설정을 만든다.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        sed -e "s|__ACCESS_KEY__|$$ACCESS_KEY|"
+        -e "s|__SECRET_KEY__|$$SECRET_KEY|"
+        -e "s|__BUCKET_PUBLIC__|$$BUCKET_PUBLIC|"
+        /etc/seaweedfs/s3-config.template.json > /tmp/s3-config.json &&
+        exec weed server -s3 -s3.config=/tmp/s3-config.json -dir=/data -volume.max=64
+    volumes:
+      - ./seaweedfs/s3-config.template.json:/etc/seaweedfs/s3-config.template.json:ro
+      - objectstorage_data:/data
+    ports:
+      - "8333:8333"
+    healthcheck:
+      # S3 는 컨테이너 주소에 바인딩되므로 localhost 로는 닿지 않는다. 자기 IP 로 확인한다.
+      # (ip.bind 로 0.0.0.0 을 주면 볼륨 서버가 마스터에 등록되지 못해 쓰기가 실패한다.)
+      # 응답 코드는 보지 않는다. 익명 요청은 정책상 403 이 정상이고, 여기서는 S3 가 응답하는지만 본다.
+      test: ["CMD-SHELL", "curl -sS -o /dev/null http://$$(hostname -i):8333/"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   api:
     build:
       context: ../backend
@@ -25,6 +61,8 @@ services:
     restart: unless-stopped
     depends_on:
       mysql:
+        condition: service_healthy
+      objectstorage:
         condition: service_healthy
     environment:
       APP_PORT: 8080
@@ -41,10 +79,18 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       DATABASE_URL: mysql://${DB_USER:-kkagung_app}:${DB_PASSWORD:-change_me}@mysql:3306/${DB_NAME:-kkagung}
       # D-01: 공개(AI·블러) 버킷과 비공개(원본) 버킷을 분리한다.
-      # 엔드포인트가 비어 있으면 추천 카드의 publicImage 가 null 로 나간다.
-      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}
+      # 서버가 S3 API 를 호출하는 주소. 컨테이너 네트워크 안에서만 쓴다.
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://objectstorage:8333}
+      # 브라우저가 공개 이미지를 받는 주소. 컨테이너 호스트명은 브라우저가 못 찾으므로 분리한다.
+      # 버킷 이름은 여기 적지 않고 아래 BUCKET_PUBLIC 값을 코드가 붙인다.
+      OBJECT_STORAGE_PUBLIC_ENDPOINT: ${OBJECT_STORAGE_PUBLIC_ENDPOINT:-http://localhost:8333}
       OBJECT_STORAGE_BUCKET_PUBLIC: ${OBJECT_STORAGE_BUCKET_PUBLIC:-kkagung-images-public}
       OBJECT_STORAGE_BUCKET_PRIVATE: ${OBJECT_STORAGE_BUCKET_PRIVATE:-kkagung-images-private}
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-kkagung_local}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-kkagung_local_secret}
+      OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+      # MinIO 는 경로 방식 주소를 쓴다. NCP 도 동일하다.
+      OBJECT_STORAGE_FORCE_PATH_STYLE: ${OBJECT_STORAGE_FORCE_PATH_STYLE:-true}
       # 시연용 테스트 계정 API. 운영에서는 켜도 라우터가 등록되지 않는다.
       ENABLE_TEST_ACCOUNTS: ${ENABLE_TEST_ACCOUNTS:-false}
       # 관리자 API 접근 허용 대역. 비우면 IP 제한을 적용하지 않는다.
@@ -67,3 +113,4 @@ services:
 
 volumes:
   mysql_data:
+  objectstorage_data:

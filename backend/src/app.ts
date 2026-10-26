@@ -15,6 +15,7 @@ import { chatRoomsRouter } from "./routes/chatRooms.js";
 import { dailyRouter } from "./routes/daily.js";
 import { devRouter } from "./routes/dev.js";
 import { heartsRouter } from "./routes/hearts.js";
+import { imagesRouter } from "./routes/images.js";
 import { meRouter } from "./routes/me.js";
 import { recommendationsRouter } from "./routes/recommendations.js";
 import { reportsRouter } from "./routes/reports.js";
@@ -27,6 +28,8 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api", rateLimit("api-ip", 90, 60));
 app.get("/health", async (_req, res, next) => { try { await prisma.$queryRaw`SELECT 1`; return ok(res, { status: "ok", database: "connected" }); } catch (e) { next(e); } });
 app.use("/api/v1/auth", authRouter);
+// 더 구체적인 경로를 먼저 붙인다. 뒤에 오는 meRouter 가 /me/images 까지 가져가지 않게 한다.
+app.use("/api/v1/me/images", imagesRouter);
 app.use("/api/v1/me", meRouter);
 app.use("/api/v1/daily", dailyRouter);
 app.use("/api/v1/recommendations", recommendationsRouter);
