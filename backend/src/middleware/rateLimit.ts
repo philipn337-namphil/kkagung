@@ -4,14 +4,15 @@ import type { RequestHandler } from "express";
 import { config } from "../config.js";
 import { prisma } from "../prisma.js";
 import { fail } from "../lib/response.js";
+import { clientIp } from "../lib/clientIp.js";
 
-// All instances must share the DB and JWT key. Do not trust caller-supplied proxy headers.
+// All instances must share the DB and JWT key. 프록시 헤더는 TRUST_PROXY 로 명시한 구간만 신뢰한다.
 export const rateLimit = (scope: string, limit: number, windowSeconds: number, account = false): RequestHandler =>
   async (req, res, next) => {
     try {
       const identity = account
         ? String(typeof req.body?.email === "string" ? req.body.email : "").trim().toLowerCase().slice(0, 255)
-        : (req.socket.remoteAddress ?? "unknown").replace(/^::ffff:/, "");
+        : clientIp(req);
       const keyHash = createHmac("sha256", config.jwtSecret).update(scope + ":" + identity).digest("hex");
       const now = Date.now();
       const windowStart = new Date(Math.floor(now / (windowSeconds * 1000)) * windowSeconds * 1000);

@@ -23,6 +23,8 @@ import { prisma } from "./prisma.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 
 export const app = express();
+// LB·프록시를 어디까지 믿을지는 배포 환경이 정한다. 값이 없으면 믿지 않는다.
+if (config.trustProxy !== false) app.set("trust proxy", config.trustProxy);
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 app.use("/api", rateLimit("api-ip", 90, 60));

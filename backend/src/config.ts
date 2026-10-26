@@ -25,8 +25,25 @@ if (process.env.AUTH_JWT_ALGORITHM && process.env.AUTH_JWT_ALGORITHM !== "HS256"
   throw new Error("Only the HS256 JWT algorithm is supported.");
 }
 
+// Load Balancer 뒤에서는 TCP 상대가 항상 LB 다. 그 주소를 그대로 쓰면 속도 제한이
+// 모든 사용자를 한 덩어리로 묶고, 관리자 IP 제한도 의미를 잃는다.
+// 그렇다고 X-Forwarded-For 를 무조건 믿으면 헤더를 넣어 제한을 우회할 수 있다.
+// 그래서 "어디까지 믿을지"를 배포 환경이 명시하게 한다. 값이 없으면 믿지 않는다(현재 동작 유지).
+const parseTrustProxy = () => {
+  const raw = (process.env.TRUST_PROXY ?? "").trim();
+  if (raw === "" || raw.toLowerCase() === "false") return false;
+  // 아무나 보낸 헤더를 믿겠다는 뜻이라 허용하지 않는다. 대역이나 홉 수로 적어야 한다.
+  if (raw.toLowerCase() === "true") {
+    throw new Error("TRUST_PROXY must name the trusted hops or ranges, not 'true'.");
+  }
+  if (/^[1-9]\d*$/.test(raw)) return Number(raw);
+  return raw;
+};
+const trustProxy = parseTrustProxy();
+
 export const config = {
   production,
+  trustProxy,
   port: Number(process.env.APP_PORT ?? 8080),
   jwtSecret,
   jwtExpiresIn: jwtExpiresIn as NonNullable<SignOptions["expiresIn"]>,
