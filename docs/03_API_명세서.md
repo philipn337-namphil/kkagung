@@ -1103,8 +1103,9 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 { "success": true, "data": { "userId": "1042", "previousStatus": "ACTIVE", "status": "SUSPENDED", "changedAt": "2026-10-27T03:30:00Z", "auditLogId": "9001" }, "error": null }
 ```
 
-- 오류: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `VALIDATION_ERROR` 400, `RESOURCE_NOT_FOUND` 404
+- 오류: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `VALIDATION_ERROR` 400, `RESOURCE_NOT_FOUND` 404, `CONFLICT` 409
 - 특별 규칙: `WITHDRAWN`으로는 바꿀 수 없다(탈퇴는 본인만). 상태 변경과 감사 로그 기록은 한 트랜잭션으로 처리한다.
+- 특별 규칙: 제재 상태는 신고와 달리 종결이 없고 서로 되돌릴 수 있다. 그래서 같은 대상에 서로 다른 제재가 겹쳐 들어오면 **먼저 반영된 값을 읽은 뒤에 온 요청은 그 위에 이어서 적용된다.** 읽은 값이 이미 바뀐 뒤였다면 `CONFLICT` 409 로 밀린다. 즉 겹친 두 요청이 모두 200 일 수 있고, 이때는 두 제재가 순서대로 적용된 것이며 감사 로그도 변경마다 한 건씩 남는다. 어느 경우든 상태가 겹쳐 쓰이거나 감사 로그가 누락되지는 않는다.
 - 반복 호출: 멱등. 같은 값으로 다시 호출하면 상태는 그대로이고 감사 로그도 추가로 남기지 않는다.
 
 ### GET `/admin/reports` ⏳
@@ -1137,8 +1138,10 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 성공 `200`: 갱신된 신고 객체 + `auditLogId`.
 
+- 오류: `UNAUTHORIZED` 401, `FORBIDDEN` 403, `VALIDATION_ERROR` 400, `RESOURCE_NOT_FOUND` 404, `CONFLICT` 409
 - 특별 규칙: 처리 결과는 신고자에게 통보하지 않는다. 제재가 필요하면 제재 API를 별도로 호출한다.
-- 반복 호출: 멱등.
+- 특별 규칙: 신고는 한 번 결론이 나면 종결이다. 이미 `RESOLVED`·`DISMISSED` 인 신고를 다시 처리하면 `CONFLICT` 409 이고 결론·`resultNote` 는 바뀌지 않는다. `PENDING` → `REVIEWING` → 종결 진행은 허용한다.
+- 반복 호출: 멱등. 종결된 신고에 다시 호출해도 저장된 결론과 감사 로그는 늘지 않는다.
 
 ### GET `/admin/settings` ⏳
 

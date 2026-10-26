@@ -233,6 +233,11 @@ adminRouter.patch("/reports/:reportId", async (req, res, next) => {
 
     const current = await prisma.report.findUnique({ where: { id: reportId }, select: { status: true } });
     if (!current) return fail(res, 404, "RESOURCE_NOT_FOUND", "신고를 찾을 수 없습니다.");
+    // 한 번 결론이 난 신고는 다시 처리하지 않는다. 종결 상태를 열어 두면 나중 요청이 앞선 결론을
+    // 덮어쓰고 같은 신고에 결론이 서로 다른 감사 로그가 둘 남는다. PENDING·REVIEWING 진행은 그대로 허용한다.
+    if (current.status === "RESOLVED" || current.status === "DISMISSED") {
+      return fail(res, 409, "CONFLICT", "이미 처리된 신고입니다.");
+    }
 
     const now = new Date();
     const result = await prisma.$transaction(async (tx) => {
