@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-10-25T22:55:51.602Z",
+  "mode": "isolated synthetic MySQL only",
+  "status": "blocked",
+  "steps": {},
+  "backupRestore": "not-run",
+  "cloudStorageVerified": false,
+  "productionRpoMeasured": false,
+  "productionRtoMeasured": false,
+  "blocker": "Docker engine unavailable; no DB changes attempted"
+}

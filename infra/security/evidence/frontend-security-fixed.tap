@@ -1,0 +1,115 @@
+TAP version 13
+# Subtest: profile text and textarea escape HTML payload
+ok 1 - profile text and textarea escape HTML payload
+  ---
+  duration_ms: 13.108
+  type: 'test'
+  ...
+# Subtest: admin API 401 is not converted to mock success
+ok 2 - admin API 401 is not converted to mock success
+  ---
+  duration_ms: 2.669
+  type: 'test'
+  ...
+# Subtest: admin API 403 is not converted to mock success
+ok 3 - admin API 403 is not converted to mock success
+  ---
+  duration_ms: 1.4888
+  type: 'test'
+  ...
+# Subtest: admin API 404 is not converted to mock success
+ok 4 - admin API 404 is not converted to mock success
+  ---
+  duration_ms: 0.9498
+  type: 'test'
+  ...
+# Subtest: admin API 409 is not converted to mock success
+ok 5 - admin API 409 is not converted to mock success
+  ---
+  duration_ms: 1.2594
+  type: 'test'
+  ...
+# Subtest: admin API 429 is not converted to mock success
+ok 6 - admin API 429 is not converted to mock success
+  ---
+  duration_ms: 1.1682
+  type: 'test'
+  ...
+# Subtest: server logout failure must retain token for revocation retry
+ok 7 - server logout failure must retain token for revocation retry
+  ---
+  duration_ms: 1.5115
+  type: 'test'
+  ...
+# Subtest: network failure must not report successful server logout
+ok 8 - network failure must not report successful server logout
+  ---
+  duration_ms: 2.018
+  type: 'test'
+  ...
+# Subtest: public card renderer refuses an ORIGINAL_PRIVATE image type
+ok 9 - public card renderer refuses an ORIGINAL_PRIVATE image type
+  ---
+  duration_ms: 1.4297
+  type: 'test'
+  ...
+# Subtest: untrusted card color must not create raw HTML
+ok 10 - untrusted card color must not create raw HTML
+  ---
+  duration_ms: 2.1416
+  type: 'test'
+  ...
+# Subtest: chat message request follows backend body field contract
+not ok 11 - chat message request follows backend body field contract
+  ---
+  duration_ms: 2.9451
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:55:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'Fixture message'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Fixture message'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:57:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: image status request follows implemented endpoint
+not ok 12 - image status request follows implemented endpoint
+  ---
+  duration_ms: 1.8814
+  type: 'test'
+  location: 'C:\\Users\\82102\\Desktop\\코덱스 저장소\\kkagung\\infra\\security\\frontend-pr20-audit.test.mjs:59:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///C:/Users/82102/Desktop/%EC%BD%94%EB%8D%B1%EC%8A%A4%20%EC%A0%80%EC%9E%A5%EC%86%8C/kkagung/infra/security/frontend-pr20-audit.test.mjs:61:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 10
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 410.677

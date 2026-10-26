@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "15f46f8ce4d8fd1139c78cf8b26443d9d0c0dc8f",
-  "recordedAt": "2026-10-25T01:32:00.169Z",
+  "baselineCommit": "072053246c2481528fa8b6c56f90df0473a4cf8c",
+  "recordedAt": "2026-10-25T23:15:27.539Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "sourceHashes": {
@@ -8,14 +8,14 @@
     "backend/src/middleware/auth.ts": "9a6ba42f0626a8ae9ea8461c5be5c3089eaf2a495293ec4fb27faf948d65cbcc",
     "backend/src/routes/auth.ts": "acf909d6d40c9a3f2439b5c2287d442d30c20e32eec5e5c0a5aa87237ff9b14f",
     "backend/src/routes/me.ts": "fd08feb8ef5c28cdb61242cc3c40ea69559763965e6289232f7f45eb226f6a0c",
-    "backend/src/app.ts": "d8e770ee3aa135913bf9789358e32eac821c6a3951e65a40f582a368b24dba16",
+    "backend/src/app.ts": "6e76f80b31c8ffbbf716e2b9460d8a5d2abfed08ec1fed6fb2faced183072ddc",
     "frontend/app.js": "96c1249a87ee4c6f454c44b4a6e634dcb0d8208255a91543de55f0febebecc8f",
     "frontend/server.js": "06b81f7395333a1da9307b9a46e98a8dfce9988d10bd80b62ccbce84a0d7f0b7",
     "backend/src/lib/tokenHash.ts": "3c493c74a3b56412085e164795662a8b0775997b5554297e8128e227ca5f3439",
     "backend/src/middleware/rateLimit.ts": "f904a80097e4c68115a8151cbc65cc301a61aebfd9b3760c05827c3865cbe1fb",
-    "backend/prisma/schema.prisma": "6361dbbf436a76a35f027cf69bacdee885d833e6f1e8fd51879ad4f40733e017",
+    "backend/prisma/schema.prisma": "f62bd49e2540ace82b87617f6b2c155a23e20427f6ae0bb4edb10321214984ea",
     "backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql": "0a1af2390c19a36cb48600b0b5fda08459b6c1d41754575641cf533037ec7d65",
-    "infra/security/tests/phase2.test.ts": "176d90d95f9f78498bf97669b90ac1a68817b37a1340e1726f2a88ad4d1b6b26",
+    "infra/security/tests/phase2.test.ts": "31936286c6ba266715304da20fa52843bdf71540f6b06be69a4e958663620dda",
     "infra/security/tests/frontend-config.test.ts": "81b7e56ed85d42421beff837064d2804e9d6497c89dcd6cdba3af39b9837d8d6",
     "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab"
   },
@@ -25,10 +25,10 @@
   },
   "tests": {
     "exitCode": 0,
-    "passed": 72,
+    "passed": 73,
     "failed": 0,
-    "pending": 7,
-    "total": 79,
+    "pending": 4,
+    "total": 77,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -307,19 +307,11 @@
         "status": "passed"
       },
       {
-        "name": "Phase 2 integration gates: implementation/infrastructure required real admin endpoint returns 403 for USER; current admin routes absent",
-        "status": "skipped"
+        "name": "Phase 2 integration gates: implementation/infrastructure required merged real admin endpoint returns 403 for USER",
+        "status": "passed"
       },
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required private original photo denied before acceptance and allowed only to participants",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required blocked pair cannot create requests or send messages",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required admin setting changes create durable before/after audit entries",
         "status": "skipped"
       },
       {

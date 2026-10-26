@@ -1,0 +1,495 @@
+{
+  "recordedAt": "2026-10-25T23:02:32.873Z",
+  "mode": "real isolated portable MySQL; synthetic data",
+  "status": "failed-tests",
+  "steps": {
+    "initialize-new-data-directory": true,
+    "database-ready": true,
+    "mysql-version": true,
+    "source-commit": true,
+    "prisma-generate": true,
+    "migration": true,
+    "synthetic-seed": true,
+    "build": true,
+    "backend-tests": false,
+    "backup": true,
+    "restore-database": true,
+    "restore-import": true,
+    "table-list": true,
+    "row-counts": true,
+    "checksums": true
+  },
+  "cloudStorageVerified": false,
+  "productionRpoMeasured": false,
+  "productionRtoMeasured": false,
+  "mysqlVersion": "8.4.13",
+  "backendCommit": "e50e9ac9c563bcf9a15bdbd954399fca1c8e18bf",
+  "tests": {
+    "passed": 94,
+    "failed": 2,
+    "pending": 17,
+    "cases": [
+      {
+        "name": "관리자 권한 토큰이 없으면 401, 일반 사용자는 403 을 반환한다",
+        "status": "skipped"
+      },
+      {
+        "name": "관리자 권한 토큰에 ADMIN 이라고 적혀 있어도 DB 역할이 일반이면 403 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "GET /api/v1/admin/dashboard 집계 수치만 반환한다",
+        "status": "skipped"
+      },
+      {
+        "name": "GET /api/v1/admin/users 관리 목적 필드만 담고 비밀번호·사진 정보는 없다",
+        "status": "skipped"
+      },
+      {
+        "name": "GET /api/v1/admin/users 상태로 걸러내고 잘못된 상태는 400 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "PATCH /api/v1/admin/users/:userId/sanction 상태를 바꾸고 감사 로그를 남긴다",
+        "status": "skipped"
+      },
+      {
+        "name": "PATCH /api/v1/admin/users/:userId/sanction 같은 값으로 다시 호출하면 감사 로그가 늘지 않는다",
+        "status": "skipped"
+      },
+      {
+        "name": "PATCH /api/v1/admin/users/:userId/sanction 동시에 두 번 바꾸면 한 번만 반영된다",
+        "status": "skipped"
+      },
+      {
+        "name": "PATCH /api/v1/admin/users/:userId/sanction 없는 사용자는 404, 잘못된 값은 400 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "신고 처리 목록을 읽고 처리하면 감사 로그가 남는다",
+        "status": "skipped"
+      },
+      {
+        "name": "신고 처리 동시에 두 번 처리하면 한 번만 반영된다",
+        "status": "skipped"
+      },
+      {
+        "name": "신고 처리 없는 신고는 404, 잘못된 값은 400 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "설정 배지 기준을 바꾸고 다시 읽으면 반영된다",
+        "status": "skipped"
+      },
+      {
+        "name": "설정 허용 범위를 벗어난 배지 값은 400 SETTING_NOT_ALLOWED 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "설정 선착순 인원은 다음 서비스 날짜부터 적용된다",
+        "status": "skipped"
+      },
+      {
+        "name": "설정 범위를 벗어난 선착순 인원은 400 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "GET /api/v1/admin/statistics/daily 기간별 집계를 돌려주고 잘못된 기간은 400 이다",
+        "status": "skipped"
+      },
+      {
+        "name": "POST /api/v1/me/blocks 차단하고 다시 차단해도 같은 정보를 돌려준다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/blocks 동시에 5번 차단해도 행은 하나만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/blocks 자신 차단은 400, 없는 사용자는 404, 토큰이 없으면 401 이다",
+        "status": "passed"
+      },
+      {
+        "name": "차단의 효과 차단한 상대는 추천에서 빠지고 하트·채팅 요청이 거절된다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/blocks 이름과 차단 시각만 담고 공개 이미지는 넣지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/me/blocks/:targetUserId 해제하면 행이 사라지고, 없는 차단은 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 오늘 추천된 상대의 카드를 공개 필드만으로 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 하트와 채팅 요청 상태를 표시한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 오늘 노출되지 않은 상대와 없는 ID 는 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 본인 카드는 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 정지된 상대는 403 TARGET_UNAVAILABLE 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 차단 관계는 양방향으로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/cards/:targetUserId 토큰이 없으면 401 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 오늘 노출된 상대에게 요청을 만든다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 동시에 5번 보내도 PENDING 요청은 하나만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 자신에게 보내면 400, 빈 메시지는 400 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 오늘 노출되지 않은 상대에게는 403 CHAT_REQUEST_NOT_ALLOWED 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 차단 관계면 요청을 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/chat-requests 토큰이 없으면 401 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "요청 처리 수락하면 방 1개와 참여자 2명이 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "요청 처리 동시에 3번 수락해도 방은 하나만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "요청 처리 거절하면 방을 만들지 않고, 다시 처리하면 409 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "요청 처리 무시하면 수신자 목록에서 숨고 발신자에게는 대기 중으로 보인다",
+        "status": "passed"
+      },
+      {
+        "name": "요청 처리 수신자가 아니면 403 FORBIDDEN, 없는 요청은 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "목록 받은 목록은 발신자를 공개 카드로만 담고 금지 필드가 없다",
+        "status": "passed"
+      },
+      {
+        "name": "목록 보낸 목록은 상대를 target 으로 담는다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms/:roomId 참여자는 상대의 공개 프로필을 받고 응답은 캐시되지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms/:roomId 참여자가 아니면 403 NOT_ROOM_MEMBER, 없는 방은 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms/:roomId 차단하면 사진을 주지 않고 전송을 막는다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 보내고 목록으로 읽는다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 같은 재시도 키로 두 번 보내면 메시지는 하나다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 같은 재시도 키로 동시에 5번 보내도 메시지는 하나다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 빈 메시지와 너무 긴 메시지는 400 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 차단 상태에서는 전송이 거절되고 과거 메시지는 읽을 수 있다",
+        "status": "passed"
+      },
+      {
+        "name": "메시지 참여자가 아니면 메시지를 보내거나 읽을 수 없다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms 내 방 목록에 상대 공개 카드와 읽지 않은 수가 담긴다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms 메시지를 읽으면 읽지 않은 수가 0 이 된다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/chat-rooms 토큰이 없으면 401 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "서비스 날짜 KST 오전 8시 이전 요청은 전날 서비스 날짜를 쓴다",
+        "status": "passed"
+      },
+      {
+        "name": "서비스 날짜 KST 오전 8시 정각 요청은 당일 서비스 날짜를 쓴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/daily/open 같은 사용자의 같은 날 두 번 조회는 같은 운세를 준다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/daily/open 시간이 지나 다시 열어도 openedAt 은 최초 값을 유지한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/daily/open 동시에 5번 호출해도 오류 없이 같은 운세이고 행은 1개만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/daily/open 응답에는 명세서에 있는 필드만 담긴다",
+        "status": "passed"
+      },
+      {
+        "name": "접근 제한 토큰이 없으면 401 UNAUTHORIZED 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "접근 제한 정지된 계정은 403 SUSPENDED_USER 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/daily 운세를 열기 전에는 404 RESOURCE_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/daily 열고 나면 같은 운세를 cards·firstOpen 없이 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 켜면 시드 계정을 모두 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 응답에 비밀번호 관련 필드가 전혀 없다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 끄면 404 RESOURCE_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 켜도 운영 환경이면 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 일반 시드 계정은 토큰을 발급한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 정지된 계정은 403 SUSPENDED_USER 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 없는 계정은 404 RESOURCE_NOT_FOUND 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 오늘 카드에 노출된 상대에게 하트를 보낸다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 같은 상대에게 다시 보내면 409 HEART_ALREADY_SENT 이고 하트는 하나다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 동시에 5번 보내도 활성 하트는 하나만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 자신에게는 400 SELF_ACTION_NOT_ALLOWED 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 차단한 상대에게는 403 TARGET_BLOCKED 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 상대가 나를 차단했으면 403 BLOCKED_BY_TARGET 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 정지된 상대에게는 403 TARGET_UNAVAILABLE 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 없는 사용자에게는 404 RECOMMENDATION_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/cards/:targetUserId/hearts 토큰이 없으면 401 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/cards/:targetUserId/hearts 하트를 취소하면 행은 남고 취소 시각이 기록된다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/cards/:targetUserId/hearts 이미 취소한 하트를 다시 취소해도 같은 결과를 준다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/cards/:targetUserId/hearts 보낸 적 없는 하트를 취소하면 404 HEART_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/hearts/received 발신자를 공개 카드 형태로만 보여주고 금지 필드가 없다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/hearts/received 취소된 하트와 차단한 발신자의 하트는 목록에서 빠진다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/hearts/received 토큰이 없으면 401 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "추천 후보 조건 남성 뷰어의 카드는 모두 여성이고 정지 계정은 없다",
+        "status": "passed"
+      },
+      {
+        "name": "추천 후보 조건 여성 뷰어의 카드는 모두 남성이고 본인은 없다",
+        "status": "passed"
+      },
+      {
+        "name": "추천 후보 조건 카드 수는 운세의 cardCount 를 넘지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "같은 날 같은 결과 재호출과 동시 5회 호출이 같은 카드를 주고 중복 행이 생기지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "차단 제외 내가 차단한 상대는 카드에 나오지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "차단 제외 상대가 나를 차단한 경우에도 카드에 나오지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "응답 필드 카드에는 PublicCard 필드만 담기고 금지 필드가 없다",
+        "status": "passed"
+      },
+      {
+        "name": "응답 필드 AI 가 없으면 블러로 대체하고, 쓸 이미지가 없거나 실패한 후보는 카드에서 제외한다",
+        "status": "failed"
+      },
+      {
+        "name": "응답 필드 공개 이미지 기준 주소가 설정되면 공개 버킷 경로로 URL 을 만든다",
+        "status": "failed"
+      },
+      {
+        "name": "GET /api/v1/recommendations/today 프로필이 없는 계정은 409 PROFILE_INCOMPLETE 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/recommendations/today 하트를 보낸 상대와 채팅을 요청한 상대를 표시한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/recommendations/today 운세를 연 뒤에는 같은 카드를 sourceType 과 함께 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "선착순 지급 재고 2인 날 5명이 동시에 열면 2명만 받고 오류가 없다",
+        "status": "passed"
+      },
+      {
+        "name": "선착순 지급 이미 받은 사람이 다시 열어도 권이 늘지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "선착순 지급 재고 행이 없는 날에도 첫 호출이 오류 없이 재고를 만든다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/recommendations/refresh 동시에 3번 눌러도 한 번만 성공한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/recommendations/refresh 권이 없으면 404 REFRESH_TOKEN_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/recommendations/refresh 보여줄 새 후보가 없으면 빈 묶음을 주고 권을 쓰지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/recommendations/refresh 새 묶음은 기본 묶음과 겹치지 않고 금지 필드가 없다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 사용자를 신고하면 접수 번호와 상태만 돌려준다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 같은 대상·사유를 다시 신고하면 409 REPORT_ALREADY_EXISTS 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 동시에 5번 접수해도 행은 하나만 생긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 다른 사유로는 같은 대상을 다시 신고할 수 있다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 필수값 누락·잘못된 코드·너무 긴 설명은 400 을 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 자신 신고는 400, 없는 대상은 404, 토큰이 없으면 401 이다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/reports 메시지 신고는 방 참여자만 할 수 있다",
+        "status": "passed"
+      }
+    ]
+  },
+  "restore": {
+    "success": true,
+    "tables": 20,
+    "rowCountsAndChecksumsMatch": true,
+    "localDumpRestoreVerifyMs": 20473
+  },
+  "serverExitCode": 0,
+  "serverStopped": true,
+  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-469f4b52b542a543"
+}
