@@ -128,7 +128,11 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
 - 한 줄 소개, 취미, 흡연·문신·군필, 닮은 연예인 등 상세 프로필
 - 하트·채팅 요청 수치(`badges`는 부여 여부만 표기하고 수치는 노출하지 않는다)
 
-`publicImage.type`은 `AI_PUBLIC` 또는 `BLURRED_PUBLIC`이다. AI 변환 실패 시 흐림 이미지를 쓰며, 둘 다 실패하면 `publicImage`는 `null`이고 화면은 대체 도형을 표시한다. 원본 사진을 대신 보내지 않는다.
+`publicImage.type`은 `AI_PUBLIC` 또는 `BLURRED_PUBLIC`이다. AI 변환이 아직 끝나지 않았거나 실패하면 흐림 이미지로 **대체**한다. 원본 사진을 대신 보내지 않는다.
+
+둘 다 쓸 수 없는 상대는 `publicImage`를 `null`로 주지 않고 **카드 자체를 목록에서 제외**한다(D-02). `GET /cards/{targetUserId}`는 같은 경우 `404 RECOMMENDATION_NOT_FOUND`를 준다. 따라서 응답에 들어 있는 카드의 `publicImage`는 값이 있다. 예외는 공개 이미지 기준 주소(`OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_BUCKET_PUBLIC`)가 설정되지 않은 환경뿐이며, 이때만 `null`이 될 수 있다. 클라이언트는 `null` 대비 대체 도형을 유지한다.
+
+`publicImage.url`은 공개 버킷(`OBJECT_STORAGE_BUCKET_PUBLIC`) 기준 주소에 object key 를 붙인 값이다. 버킷명은 환경변수로만 읽는다(D-01).
 
 ### RevealedProfile — 수락 후 공개 프로필
 
