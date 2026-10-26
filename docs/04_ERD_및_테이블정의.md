@@ -20,7 +20,7 @@ erDiagram
 
 | 테이블 | 핵심 컬럼·규칙 |
 |---|---|
-| `users` | `id`, `email UNIQUE`, `password_hash`, `role(USER/ADMIN)`, `adult_verified_at`, `status`, `last_active_at` |
+| `users` | `id`, `email UNIQUE`, `password_hash`, `role(USER/ADMIN)`, `adult_verified_at`, `withdrawn_at`, `status`, `last_active_at` |
 | `user_profiles` | `user_id PK/FK`, 이름, 생년월일, 성별, 지역, 키, 직업, MBTI, 선택 특성·소개 |
 | `user_preferences` | `user_id PK/FK`, 관심 성별·나이, 지역 범위, 특성 조건. 성별·나이 외 `ANY` 허용 |
 | `profile_images` | `user_id`, `image_type(ORIGINAL_PRIVATE/AI_PUBLIC/BLURRED_PUBLIC)`, `object_key`, `generation_status` |
@@ -56,6 +56,8 @@ erDiagram
 | `hearts` | `(receiver_id,created_at)` | 최근 30일 배지 집계 |
 
 인기 배지는 최근 30일의 서로 다른 발신자에게 받은 하트와 채팅 요청을 집계하며, 차단·제재·신고 검토 중 계정의 비정상 반응은 제외한다.
+
+`users.withdrawn_at`은 탈퇴 시각이다. 탈퇴는 행을 지우지 않고 `status`를 `WITHDRAWN`으로 바꾸면서 이 값을 남긴다. 행을 지우면 신고·채팅 기록의 참조가 끊기기 때문이고, 반복 호출에도 같은 시각을 돌려주려면 매번 바뀌는 `updated_at`과 분리된 컬럼이 필요하다. 개인정보 완전 삭제 기준과 보관 기간은 보안·운영과 확정해야 한다.
 
 ---
 
