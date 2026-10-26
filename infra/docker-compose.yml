@@ -28,6 +28,10 @@ services:
         condition: service_healthy
     environment:
       APP_PORT: 8080
+      # 이미지(backend/Dockerfile)는 운영 기본값으로 NODE_ENV=production 을 굽는다.
+      # 이 Compose 는 로컬 전용이라 그대로 두면 가입이 403 으로 막히고 /api/v1/dev 도 등록되지 않아
+      # 시연·통합 테스트를 할 수 없다. 여기서만 개발값으로 덮고, 배포 환경은 production 을 명시한다.
+      NODE_ENV: ${NODE_ENV:-development}
       APP_ENV: ${APP_ENV:-development}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       # config.ts 는 32바이트 미만과 알려진 개발 기본키를 거부한다(SEC-09).
