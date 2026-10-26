@@ -19,7 +19,7 @@
 | `main` | 실행 가능한 안정 버전. 직접 커밋 금지 | 팀장 병합만 |
 | `develop` | 기능 통합·테스트 브랜치 | 모든 팀원은 PR로 병합 |
 | `feature/frontend` | 사용자 화면 및 관리자 화면 UI | 이재원 |
-| `feature/backend-db` | API, DB 설계·마이그레이션, 추천·관리자 로직 | 백엔드·DB 담당 |
+| `feature/backend-db` | API, DB 설계·마이그레이션, 추천·관리자 로직 | 박민상 |
 | `feature/infra` | Docker, 배포 스크립트, NCP 인프라 문서·구성 | 남필량 |
 | `feature/security-ops` | 보안 설정, 접근 제어, 로그·백업·운영 점검 | 김서현 |
 
