@@ -61,6 +61,20 @@ RUN_MIGRATIONS_ON_START=false
 | Subnet | `kkagung-sn-app` | `10.0.10.0/24` | 비공인 |
 | Subnet | `kkagung-sn-db` | `10.0.20.0/24` | 비공인 |
 
+실제로 만든 자원은 아래와 같다. 이후 단계에서 이 이름으로 지정한다.
+
+```
+VPC     kkagung-vpc      151444
+Subnet  kkagung-sn-lb    332078
+        kkagung-sn-app   332079
+        kkagung-sn-db    332080
+ACG     kkagung-acg-lb   411093
+        kkagung-acg-app  411094
+        kkagung-acg-db   411095
+```
+
+`kkagung-acg-db` 는 Cloud DB 가 전용 ACG 를 따로 만들기 때문에 쓰이지 않는다. 2단계를 참고한다.
+
 ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서버가 늘어도 규칙을 고치지 않기 위해서다.
 
 | ACG | 인바운드 허용 |
@@ -75,9 +89,44 @@ NACL 은 서브넷 단위로 위 경로 외의 인·아웃바운드를 차단한
 
 ## 2. 데이터
 
-**Cloud DB for MySQL** — `kkagung-sn-db` 에 배치, HA 구성, 자동 백업과 시점 복원을 켠다. 접속은 `kkagung-acg-db` 로만 연다.
+### Cloud DB for MySQL
 
-**Object Storage** — 버킷 두 개를 만든다(D-01).
+| 항목 | 값 | 비고 |
+|---|---|---|
+| 엔진 | mysql 8.4 | 로컬 `mysql:8.4` 와 같은 계열로 맞춘다 |
+| 서브넷 | `kkagung-sn-db` | Private |
+| 고가용성 | 사용 | |
+| 서버 스펙 | vCPU 2 / 8GB 이상 | 최소 사양이면 부하 테스트에서 DB 가 먼저 병목이 된다 |
+| 기본 DB 명 | `kkagung` | |
+| 사용자 | `kkagung_app` | |
+| `HOST(IP)` | `10.0.10.%` | 앱 서브넷 대역으로 제한한다. ACG 가 잘못돼도 계정이 한 번 더 막는다 |
+| 백업 | 사용, **보관 7일 이상** | 기본값 1일이면 하루 지나 발견한 문제를 되돌릴 수 없다 |
+| 백업 시간 | 오전 8시를 피한 시각 | 서비스 피크와 겹치지 않게 |
+| 반납 보호 | 설정 | 실수로 Master DB 를 지우는 것을 막는다 |
+| DB Config | 기본 템플릿 | 아래 시간대 참고 |
+
+**ACG 는 자동 생성된다.** Cloud DB 는 `cloud-mysql-*` 형태의 전용 ACG 를 스스로 만든다.
+직접 만든 ACG 를 붙이는 구조가 아니므로, 생성이 끝난 뒤 그 자동 생성 ACG 에 규칙을 넣는다.
+
+```
+cloud-mysql-*   접근 소스: kkagung-acg-app   포트: 3306
+```
+
+#### DB 시간대는 맞추지 않아도 된다
+
+마이그레이션에 `DEFAULT CURRENT_TIMESTAMP(3)` 가 16곳 있어 DB 시계를 쓰는 것처럼 보이지만,
+Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 INSERT 에 실어 보낸다.**
+실제 INSERT 문에 `created_at` 컬럼이 포함되는 것으로 확인했다. DB 의 `time_zone` 설정과 무관하다.
+
+#### 저장 데이터 암호화
+
+교육용 계정에서는 선택할 수 없어 적용하지 않았다. 생성 이후에는 변경할 수 없으므로,
+실서비스로 전환할 때 다시 검토한다. 현재는 비공인 서브넷 배치, ACG 제한, DB 계정 호스트 제한,
+로그 마스킹(SEC-08), 원본 사진을 DB 가 아닌 비공개 버킷에 두는 구성으로 대응한다.
+
+### Object Storage
+
+버킷 두 개를 만든다(D-01).
 
 | 버킷 | 공개 설정 |
 |---|---|
@@ -91,7 +140,11 @@ NACL 은 서브넷 단위로 위 경로 외의 인·아웃바운드를 차단한
 ## 3. 앱 서버와 로드밸런서
 
 1. 서버 이미지에 Docker 와 애플리케이션 이미지를 포함한다
-2. Init Script 가 환경변수를 주입하고 컨테이너를 기동한다 (`RUN_MIGRATIONS_ON_START=false`)
+2. Init Script 가 환경변수를 주입하고 컨테이너를 기동한다 — `infra/ncp/init-script.sh`
+   - 비밀값은 스크립트에 적지 않는다. 콘솔의 서버 환경변수로 넘기고 스크립트는 읽기만 한다
+   - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
+   - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
+   - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
 3. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
 4. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
