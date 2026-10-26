@@ -95,6 +95,9 @@ services:
       ENABLE_TEST_ACCOUNTS: ${ENABLE_TEST_ACCOUNTS:-false}
       # 관리자 API 접근 허용 대역. 비우면 IP 제한을 적용하지 않는다.
       ADMIN_ALLOWED_IP_CIDRS: ${ADMIN_ALLOWED_IP_CIDRS:-}
+      # LB·프록시를 어디까지 믿을지. 비우면 믿지 않고 TCP 상대 주소를 쓴다.
+      # 운영에서는 LB 홉 수나 대역을 적어야 속도 제한이 사용자별로 걸린다.
+      TRUST_PROXY: ${TRUST_PROXY:-}
     ports:
       - "8080:8080"
 
