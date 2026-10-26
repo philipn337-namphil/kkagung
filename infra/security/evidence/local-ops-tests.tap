@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: unsafe Git path rejected: .env
+ok 1 - unsafe Git path rejected: .env
+  ---
+  duration_ms: 1.7513
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: backend/.env.production
+ok 2 - unsafe Git path rejected: backend/.env.production
+  ---
+  duration_ms: 0.5015
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: originals/photo.jpg
+ok 3 - unsafe Git path rejected: originals/photo.jpg
+  ---
+  duration_ms: 0.1224
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: storage/private/photo.png
+ok 4 - unsafe Git path rejected: storage/private/photo.png
+  ---
+  duration_ms: 0.124
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: db-dumps/test.sql
+ok 5 - unsafe Git path rejected: db-dumps/test.sql
+  ---
+  duration_ms: 0.1471
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: db_dump.sql
+ok 6 - unsafe Git path rejected: db_dump.sql
+  ---
+  duration_ms: 0.1671
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: key.pem
+ok 7 - unsafe Git path rejected: key.pem
+  ---
+  duration_ms: 0.3017
+  type: 'test'
+  ...
+# Subtest: unsafe Git path rejected: .aws/config
+ok 8 - unsafe Git path rejected: .aws/config
+  ---
+  duration_ms: 0.2272
+  type: 'test'
+  ...
+# Subtest: migrations and empty distributable environment examples are accepted
+ok 9 - migrations and empty distributable environment examples are accepted
+  ---
+  duration_ms: 1.8577
+  type: 'test'
+  ...
+# Subtest: example signing secrets are rejected without printing their values
+ok 10 - example signing secrets are rejected without printing their values
+  ---
+  duration_ms: 0.487
+  type: 'test'
+  ...
+# Subtest: embedded private keys are rejected regardless of extension
+ok 11 - embedded private keys are rejected regardless of extension
+  ---
+  duration_ms: 0.168
+  type: 'test'
+  ...
+# Subtest: synthetic encrypted backup roundtrip and negative cases pass
+ok 12 - synthetic encrypted backup roundtrip and negative cases pass
+  ---
+  duration_ms: 35.475
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 230.6167

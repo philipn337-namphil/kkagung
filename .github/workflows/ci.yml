@@ -1,0 +1,160 @@
+name: CI
+
+# develop·main 으로 가는 PR 과 병합 결과를 검사한다.
+# 각 PR 이 따로 통과해도 합치면 깨지는 경우를 머지 전에 잡는 것이 목적이다.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 백엔드 빌드·테스트 (실제 MySQL)
+    runs-on: ubuntu-latest
+
+    # 개발 DB 를 공유하면 테스트끼리 서로의 행을 지운다. 실행마다 빈 DB 를 새로 띄운다.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+          MYSQL_DATABASE: kkagung_ci
+          MYSQL_USER: kkagung_ci
+          MYSQL_PASSWORD: ci_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      # 호스트가 루프백이어야 tests/setup.ts 의 안전 가드를 통과한다.
+      DATABASE_URL: mysql://kkagung_ci:ci_password@127.0.0.1:3306/kkagung_ci
+      ENABLE_TEST_ACCOUNTS: "true"
+      # 사진 업로드 테스트는 실제 S3 호환 저장소로 검증한다. 아래 단계에서 띄운다(D-01).
+      OBJECT_STORAGE_ENDPOINT: http://127.0.0.1:8333
+      OBJECT_STORAGE_BUCKET_PUBLIC: kkagung-images-public
+      OBJECT_STORAGE_BUCKET_PRIVATE: kkagung-images-private
+      OBJECT_STORAGE_ACCESS_KEY: kkagung_ci
+      OBJECT_STORAGE_SECRET_KEY: kkagung_ci_secret_value
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "true"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # config.ts 는 32바이트 미만과 알려진 개발 기본키를 거부한다(SEC-09).
+      # 실행마다 새로 만들고 값은 로그에 남기지 않는다.
+      - name: JWT 시크릿 생성
+        run: |
+          secret="$(openssl rand -base64 48)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET=$secret" >> "$GITHUB_ENV"
+
+      # NCP Object Storage 는 S3 호환이라 같은 코드로 검증된다. 원본 비공개·공개 버킷 분리까지
+      # 정책으로 재현해야 "수락 전 원본 비노출"을 실제로 확인할 수 있다(D-01).
+      - name: 객체 저장소 기동
+        working-directory: .
+        run: |
+          sed -e "s|__ACCESS_KEY__|$OBJECT_STORAGE_ACCESS_KEY|" \
+              -e "s|__SECRET_KEY__|$OBJECT_STORAGE_SECRET_KEY|" \
+              -e "s|__BUCKET_PUBLIC__|$OBJECT_STORAGE_BUCKET_PUBLIC|" \
+              infra/seaweedfs/s3-config.template.json > "$RUNNER_TEMP/s3-config.json"
+          docker run -d --name kkagung-ci-storage -p 8333:8333 \
+            -v "$RUNNER_TEMP/s3-config.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:4.50 \
+            server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -volume.max=64
+          for attempt in $(seq 1 60); do
+            # 익명 요청은 정책상 403 이 정상이다. 응답이 오는지만 본다.
+            if curl -sS -o /dev/null "http://127.0.0.1:8333/"; then echo "storage ready"; exit 0; fi
+            sleep 2
+          done
+          echo "object storage did not start in time" >&2
+          docker logs kkagung-ci-storage | tail -40 >&2
+          exit 1
+
+      - name: 의존성 설치
+        run: npm ci --ignore-scripts
+
+      - name: Prisma Client 생성
+        run: npx prisma generate
+
+      - name: TypeScript 빌드
+        run: npm run build
+
+      - name: 마이그레이션 적용
+        run: npx prisma migrate deploy
+
+      - name: 시드 적용
+        run: npm run db:seed
+
+      # vitest 는 fileParallelism: false 로 파일을 순서대로 실행한다.
+      - name: 테스트
+        run: npm test
+
+  frontend:
+    name: 프론트 구문 검사
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # 빌드 단계가 없는 정적 앱이라 구문 오류만 확인한다.
+      - name: app.js
+        run: node --check frontend/app.js
+      - name: server.js
+        run: node --check frontend/server.js
+
+  compose:
+    name: Compose 설정 검증
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JWT_SECRET 기본값을 없앤 것이 되돌아가면 운영 설정이 조용히 약해진다.
+      - name: 시크릿 없이 실행하면 막혀야 한다
+        run: |
+          if output="$(docker compose -f infra/docker-compose.yml config 2>&1)"; then
+            echo "JWT_SECRET 없이도 통과했다. 필수 변수 설정이 풀렸는지 확인할 것." >&2
+            exit 1
+          fi
+          # 다른 이유로 실패한 것을 통과로 착각하지 않도록 사유를 확인한다.
+          echo "$output" | grep -q "JWT_SECRET" || {
+            echo "JWT_SECRET 과 무관한 이유로 실패했다. Compose 파일을 확인할 것." >&2
+            echo "$output" >&2
+            exit 1
+          }
+          echo "의도대로 중단됨"
+
+      - name: 시크릿을 주면 정상 파싱된다
+        run: |
+          JWT_SECRET="$(openssl rand -base64 48)" \
+            docker compose -f infra/docker-compose.yml config >/dev/null
+
+      # 이미지가 NODE_ENV=production 을 굽기 때문에, 로컬 Compose 가 덮지 않으면
+      # 가입이 403 이 되고 /api/v1/dev 가 404 가 된다.
+      - name: 로컬 Compose 는 개발 모드여야 한다
+        run: |
+          config="$(JWT_SECRET="$(openssl rand -base64 48)" docker compose -f infra/docker-compose.yml config)"
+          echo "$config" | grep -q "NODE_ENV: development" || {
+            echo "로컬 Compose 의 NODE_ENV 가 development 가 아니다." >&2
+            exit 1
+          }
+          echo "확인됨"

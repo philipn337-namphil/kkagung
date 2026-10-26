@@ -1,0 +1,119 @@
+{
+  "baselineCommit": "ebc48552c7d6e53eb7902da6c3cce83cb0f4a97f",
+  "recordedAt": "2026-10-23T08:13:51.136Z",
+  "node": "v24.22.1",
+  "mode": "real HTTP routes, mock Prisma; no live DB/storage",
+  "build": {
+    "exitCode": 0,
+    "success": true
+  },
+  "tests": {
+    "exitCode": 1,
+    "passed": 6,
+    "failed": 12,
+    "pending": 7,
+    "total": 25,
+    "cases": [
+      {
+        "name": "existing authentication and profile routes (mock DB) missing token returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) expired token returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) forged signature returns 401",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) wrong issuer and audience must return 401",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) valid token accesses own profile",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) existing token of SUSPENDED account must be rejected",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) existing token of WITHDRAWN account must be rejected",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) unverified account must be rejected",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) logged-out token must not remain usable",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) registration must not accept client-only adult verification",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) withdrawn account must not obtain a new login token",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) login token must respect 15 minute policy and required claims",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) login failure bursts must eventually return 429 (50 local requests)",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) general API bursts must eventually return 429 (100 local requests)",
+        "status": "failed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) own profile writes must not follow a caller-supplied userId",
+        "status": "passed"
+      },
+      {
+        "name": "existing authentication and profile routes (mock DB) error logging must redact sensitive values",
+        "status": "failed"
+      },
+      {
+        "name": "admin middleware in isolation (not an implemented admin API) USER role is rejected with 403 by middleware",
+        "status": "passed"
+      },
+      {
+        "name": "admin middleware in isolation (not an implemented admin API) revoked admin role must not trust stale ADMIN token",
+        "status": "failed"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required real admin endpoint returns 403 for USER; current admin routes absent",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required private original photo denied before acceptance and allowed only to participants",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required blocked pair cannot create requests or send messages",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required admin setting changes create durable before/after audit entries",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required disguised extension, invalid MIME, oversize and excessive pixels rejected; EXIF removed",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required recommendation/heart/chat ownership, sanction and withdrawal restrictions enforced",
+        "status": "skipped"
+      },
+      {
+        "name": "Phase 2 integration gates: implementation/infrastructure required isolated DB/object/NAS restore meets measured RPO and RTO",
+        "status": "skipped"
+      }
+    ]
+  }
+}

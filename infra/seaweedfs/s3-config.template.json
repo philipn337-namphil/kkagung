@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "SeaweedFS S3 접근 정책 템플릿이다. 컨테이너가 기동할 때 __ACCESS_KEY__ 와 __SECRET_KEY__ 를",
+    "환경변수 값으로 바꿔 실제 설정 파일을 만든다. 자격증명을 저장소에 두지 않기 위해서다.",
+    "D-01: 익명 사용자는 공개 버킷만 읽는다. 원본 버킷은 어떤 익명 접근도 허용하지 않고,",
+    "자격증명을 가진 앱만 읽고 쓴다. 원본은 앱이 발급한 짧은 서명 URL 로만 내려간다."
+  ],
+  "identities": [
+    {
+      "name": "anonymous",
+      "actions": ["Read:__BUCKET_PUBLIC__"]
+    },
+    {
+      "name": "app",
+      "credentials": [
+        { "accessKey": "__ACCESS_KEY__", "secretKey": "__SECRET_KEY__" }
+      ],
+      "actions": ["Admin", "Read", "Write"]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "revision": "ef1f722636d69f9cdd02bb67fb7ead1403b2fd89",
+  "sourceHash": "3e55ec86db67ff895811e592a043c4c78be99fd1064d95cf6ca23be62553e213",
+  "mode": "unchanged app.js in VM; fake DOM/storage/fetch; renderer output and callback behavior only, NOT browser script execution or live backend"
+}
