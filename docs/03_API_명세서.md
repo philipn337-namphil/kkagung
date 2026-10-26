@@ -113,7 +113,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
   "animalFace": "고양이상",
   "badges": ["POPULAR"],
   "publicImage": {
-    "url": "https://kkagung-profile-public.example/profiles/ai/8f3c.../a91e.webp",
+    "url": "https://kkagung-images-public.example/profiles/ai/8f3c.../a91e.webp",
     "type": "AI_PUBLIC"
   },
   "recommendReason": "선호 지역과 나이 조건이 일치해요."
@@ -157,7 +157,7 @@ Phase 2 백엔드 API 계약서이다. 프론트엔드는 이 문서를 기준�
   "originalImages": [
     {
       "imageId": "9931",
-      "url": "https://kkagung-original-private.example/originals/8f3c.../a91e.jpg?X-Amz-Expires=60&...",
+      "url": "https://kkagung-images-private.example/originals/8f3c.../a91e.jpg?X-Amz-Expires=60&...",
       "expiresAt": "2026-10-27T02:01:00Z"
     }
   ]
@@ -283,11 +283,11 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| GET | `/dev/test-accounts` | 공개(개발 환경) | 🔜 |
-| POST | `/dev/test-accounts/{accountId}/token` | 공개(개발 환경) | 🔜 |
-| POST | `/dev/test-accounts/reseed` | 공개(개발 환경) | 🔜 |
+| GET | `/dev/test-accounts` | 공개(개발 환경) | ✅ |
+| POST | `/dev/test-accounts/{accountId}/token` | 공개(개발 환경) | ✅ |
+| POST | `/dev/test-accounts/reseed` | 공개(개발 환경) | ✅ |
 
-### GET `/dev/test-accounts` 🔜
+### GET `/dev/test-accounts` ✅
 
 로그인 화면에서 "테스트 계정으로 접속" 목록을 그리기 위한 API다.
 
@@ -311,7 +311,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 - 특별 규칙: 비밀번호·해시는 절대 반환하지 않는다. 시드로 만든 계정만 반환하며 실제 가입자는 포함하지 않는다. 판별은 시드 전용 이메일 도메인(`@kkagung.local`)으로 한다. 이 방식은 `users` 테이블에 새 컬럼을 추가하지 않으므로 ERD 변경이 필요 없다.
 - 반복 호출: 멱등.
 
-### POST `/dev/test-accounts/{accountId}/token` 🔜
+### POST `/dev/test-accounts/{accountId}/token` ✅
 
 목록에서 계정을 골라 비밀번호 입력 없이 토큰을 받는다.
 
@@ -321,7 +321,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 - 특별 규칙: 시드 전용 이메일 도메인 계정만 허용한다. 실제 가입자 ID를 넣으면 `RESOURCE_NOT_FOUND`로 거부한다.
 - 반복 호출: 멱등(호출마다 새 토큰이 발급되지만 계정 상태는 바뀌지 않는다).
 
-### POST `/dev/test-accounts/reseed` 🔜
+### POST `/dev/test-accounts/reseed` ✅
 
 시연 중 데이터가 더럽혀졌을 때 시드 상태로 되돌린다.
 
@@ -343,7 +343,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 | GET | `/me` | 로그인 | ✅ |
 | PUT | `/me/profile` | 로그인 | ✅ |
 | PUT | `/me/preferences` | 로그인 | ✅ |
-| DELETE | `/me` | 로그인 | ⏳ |
+| DELETE | `/me` | 로그인 | ✅ |
 
 ### GET `/me` ✅
 
@@ -420,7 +420,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 - 특별 규칙: 성별·나이는 `ANY`를 허용하지 않는다. 그 외 조건은 `ANY`로 "상관없음"을 표현한다.
 - 반복 호출: 멱등.
 
-### DELETE `/me` ⏳
+### DELETE `/me` ✅
 
 탈퇴. 마이페이지 화면 정의에 있으나 담당·시점 미정이다.
 
@@ -438,12 +438,12 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| GET | `/me/images` | 로그인 | ⏳ |
-| POST | `/me/images` | 로그인 | ⏳ |
-| DELETE | `/me/images/{imageId}` | 로그인 | ⏳ |
+| GET | `/me/images` | 로그인 | ✅ |
+| POST | `/me/images` | 로그인 | ✅ |
+| DELETE | `/me/images/{imageId}` | 로그인 | ✅ |
 | GET | `/me/images/status` | 로그인 | 경로만 존재. 현재 `NOT_IMPLEMENTED` 501 반환 |
 
-### GET `/me/images` ⏳
+### GET `/me/images` ✅
 
 내 사진 목록. 본인이므로 자신의 원본은 조회할 수 있다.
 
@@ -452,7 +452,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
   "success": true,
   "data": {
     "images": [
-      { "imageId": "9931", "slot": 1, "generationStatus": "DONE", "publicUrl": "https://example-public/profiles/ai/8f3c/a91e.webp", "publicType": "AI_PUBLIC", "originalUrl": "https://example-private/originals/8f3c/a91e.jpg?expires=60", "originalUrlExpiresAt": "2026-10-27T02:01:00Z", "uploadedAt": "2026-10-26T23:40:00Z" }
+      { "imageId": "9931", "slot": 1, "generationStatus": "DONE", "publicUrl": "https://kkagung-images-public.example/profiles/ai/8f3c/a91e.webp", "publicType": "AI_PUBLIC", "originalUrl": "https://kkagung-images-private.example/originals/8f3c/a91e.jpg?expires=60", "originalUrlExpiresAt": "2026-10-27T02:01:00Z", "uploadedAt": "2026-10-26T23:40:00Z" }
     ]
   },
   "error": null
@@ -464,7 +464,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 - 특별 규칙: `originalUrl`은 **본인 요청에만** 포함되고 60초 만료다. object key는 반환하지 않는다. 응답에 `Cache-Control: no-store`를 붙인다.
 - 반복 호출: 멱등.
 
-### POST `/me/images` ⏳
+### POST `/me/images` ✅
 
 원본 사진 업로드. `multipart/form-data`로 전송한다.
 
@@ -483,7 +483,7 @@ Phase 1에서 빠졌던 3개다. **운영 환경에서는 비활성이며 호출
 - 특별 규칙: 클라이언트가 보낸 버킷·object key·이미지 종류를 신뢰하지 않는다. 서버가 경로를 정하고 실제 파일 형식을 검사하며 위치 정보 등 메타데이터를 제거한다. 원본은 비공개 버킷에만 저장한다. 사진은 최대 3장이다.
 - 반복 호출: 비멱등. 호출마다 새 사진이 추가된다.
 
-### DELETE `/me/images/{imageId}` ⏳
+### DELETE `/me/images/{imageId}` ✅
 
 성공 `200`:
 
@@ -512,13 +512,13 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| POST | `/daily/open` | 로그인 | 🔜 |
-| GET | `/daily` | 로그인 | 🔜 |
-| GET | `/recommendations/today` | 로그인 | 🔜 |
-| POST | `/recommendations/refresh` | 로그인 | 🔜 |
-| GET | `/cards/{targetUserId}` | 로그인 | 🔜 |
+| POST | `/daily/open` | 로그인 | ✅ |
+| GET | `/daily` | 로그인 | ✅ |
+| GET | `/recommendations/today` | 로그인 | ✅ |
+| POST | `/recommendations/refresh` | 로그인 | ✅ |
+| GET | `/cards/{targetUserId}` | 로그인 | ✅ |
 
-### POST `/daily/open` 🔜
+### POST `/daily/open` ✅
 
 홈 진입 시 첫 호출. 운세를 공개하고 선착순 새로고침권 지급을 시도한 뒤 홈 데이터를 돌려준다.
 
@@ -560,7 +560,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 추천 후보가 부족하면 선택 조건을 완화하되 성별·나이 상호 조건, 지역, 차단, 정지·탈퇴 제외는 유지한다.
 - 반복 호출: **멱등.** 재시도해도 운세가 바뀌거나 새로고침권이 중복 지급되지 않는다.
 
-### GET `/daily` 🔜
+### GET `/daily` ✅
 
 운세·새로고침권 상태만 가볍게 조회한다. 지급 시도는 하지 않는다.
 
@@ -570,7 +570,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 읽기 전용이다. 이 API로는 새로고침권이 지급되지 않는다.
 - 반복 호출: 멱등.
 
-### GET `/recommendations/today` 🔜
+### GET `/recommendations/today` ✅
 
 당일 추천 카드 목록. 새로고침을 썼다면 새로고침된 묶음을 반환한다.
 
@@ -598,7 +598,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 차단·정지·탈퇴·추천 제외 상대는 사전 계산된 목록에서도 응답 시점에 다시 걸러낸다. 카드 생성 후 상태가 바뀐 경우를 반영하기 위함이며, 이때 카드 수는 `cardCount`보다 적을 수 있다.
 - 반복 호출: 멱등.
 
-### POST `/recommendations/refresh` 🔜
+### POST `/recommendations/refresh` ✅
 
 새로고침권을 사용해 새 카드 묶음을 받는다.
 
@@ -625,7 +625,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 새로고침권은 다음 날 오전 8시(KST)에 만료된다.
 - 반복 호출: 비멱등. 성공은 한 번뿐이고 두 번째부터는 `REFRESH_TOKEN_ALREADY_USED`다. 단 후보가 없어 권을 쓰지 않은 호출은 몇 번이든 같은 빈 응답을 준다.
 
-### GET `/cards/{targetUserId}` 🔜
+### GET `/cards/{targetUserId}` ✅
 
 추천 카드 상세. 공개 정보와 추천 이유만 반환한다.
 
@@ -653,11 +653,11 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| POST | `/cards/{targetUserId}/hearts` | 로그인 | 🔜 |
-| DELETE | `/cards/{targetUserId}/hearts` | 로그인 | 🔜 |
-| GET | `/hearts/received` | 로그인 | 🔜 |
+| POST | `/cards/{targetUserId}/hearts` | 로그인 | ✅ |
+| DELETE | `/cards/{targetUserId}/hearts` | 로그인 | ✅ |
+| GET | `/hearts/received` | 로그인 | ✅ |
 
-### POST `/cards/{targetUserId}/hearts` 🔜
+### POST `/cards/{targetUserId}/hearts` ✅
 
 본문 없음. 성공 `201`:
 
@@ -673,7 +673,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 받는 사람에게 발신자 정보는 `PublicCard` 형태로만 보인다.
 - 반복 호출: 멱등. 두 번째 호출은 `HEART_ALREADY_SENT`이며 하트가 두 개 생기지 않는다.
 
-### DELETE `/cards/{targetUserId}/hearts` 🔜
+### DELETE `/cards/{targetUserId}/hearts` ✅
 
 하트 취소. 성공 `200`:
 
@@ -685,7 +685,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 취소한 하트는 인기 배지 집계에서 제외된다. 다만 집계 왜곡을 막기 위해 행을 지우지 않고 취소 시각을 남긴다.
 - 반복 호출: 멱등.
 
-### GET `/hearts/received` 🔜
+### GET `/hearts/received` ✅
 
 받은 하트 목록. 목록 응답 형식을 따른다.
 
@@ -722,14 +722,14 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| POST | `/chat-requests` | 로그인 | 🔜 |
-| GET | `/chat-requests/received` | 로그인 | 🔜 |
-| GET | `/chat-requests/sent` | 로그인 | 🔜 |
-| POST | `/chat-requests/{requestId}/accept` | 로그인(수신자) | 🔜 |
-| POST | `/chat-requests/{requestId}/reject` | 로그인(수신자) | 🔜 |
-| POST | `/chat-requests/{requestId}/ignore` | 로그인(수신자) | 🔜 |
+| POST | `/chat-requests` | 로그인 | ✅ |
+| GET | `/chat-requests/received` | 로그인 | ✅ |
+| GET | `/chat-requests/sent` | 로그인 | ✅ |
+| POST | `/chat-requests/{requestId}/accept` | 로그인(수신자) | ✅ |
+| POST | `/chat-requests/{requestId}/reject` | 로그인(수신자) | ✅ |
+| POST | `/chat-requests/{requestId}/ignore` | 로그인(수신자) | ✅ |
 
-### POST `/chat-requests` 🔜
+### POST `/chat-requests` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -753,7 +753,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 거절·무시된 뒤 다시 보낼 수 있는지는 팀 합의 사항이다. 현재 계약은 **같은 서비스 날짜에는 재요청 불가**로 정한다.
 - 반복 호출: 멱등. 두 번째 호출은 `CHAT_REQUEST_ALREADY_PENDING`.
 
-### GET `/chat-requests/received` 🔜
+### GET `/chat-requests/received` ✅
 
 쿼리: `?status=PENDING&cursor=&limit=` (`status` 생략 시 전체)
 
@@ -785,14 +785,14 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 오류: `UNAUTHORIZED` 401
 - 반복 호출: 멱등.
 
-### GET `/chat-requests/sent` 🔜
+### GET `/chat-requests/sent` ✅
 
 `received`와 같은 모양이고 `sender` 대신 `target`(`PublicCard`)을 담는다.
 
 - 특별 규칙: 상대가 무시(`IGNORED`)한 경우에도 발신자에게는 `PENDING`으로 보인다. 무시 사실을 상대에게 알리지 않기 위함이다. 이 처리는 프론트·보안 담당과 합의가 필요하다.
 - 반복 호출: 멱등.
 
-### POST `/chat-requests/{requestId}/accept` 🔜
+### POST `/chat-requests/{requestId}/accept` ✅
 
 수락하고 채팅방을 만든다. 본문 없음.
 
@@ -809,7 +809,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 수락 처리와 채팅방 생성은 한 트랜잭션으로 처리한다.
 - 반복 호출: 멱등. 재시도 시 이미 만들어진 `roomId`를 그대로 반환하거나 `CHAT_REQUEST_ALREADY_RESOLVED`를 반환한다. 방이 두 개 생기지 않는다.
 
-### POST `/chat-requests/{requestId}/reject` 🔜
+### POST `/chat-requests/{requestId}/reject` ✅
 
 성공 `200`:
 
@@ -821,7 +821,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 채팅방을 만들지 않고 원본 사진 URL도 제공하지 않는다.
 - 반복 호출: 멱등.
 
-### POST `/chat-requests/{requestId}/ignore` 🔜
+### POST `/chat-requests/{requestId}/ignore` ✅
 
 **신규 추가.** 기존 명세에는 `accept`·`reject`만 있었으나 UX 시나리오(U3)와 화면 정의에 "무시"가 있어 경로를 추가했다.
 
@@ -838,12 +838,12 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| GET | `/chat-rooms` | 로그인(참여자) | 🔜 |
-| GET | `/chat-rooms/{roomId}` | 로그인(참여자) | 🔜 |
-| GET | `/chat-rooms/{roomId}/messages` | 로그인(참여자) | 🔜 |
-| POST | `/chat-rooms/{roomId}/messages` | 로그인(참여자) | 🔜 |
+| GET | `/chat-rooms` | 로그인(참여자) | ✅ |
+| GET | `/chat-rooms/{roomId}` | 로그인(참여자) | ✅ |
+| GET | `/chat-rooms/{roomId}/messages` | 로그인(참여자) | ✅ |
+| POST | `/chat-rooms/{roomId}/messages` | 로그인(참여자) | ✅ |
 
-### GET `/chat-rooms` 🔜
+### GET `/chat-rooms` ✅
 
 내 채팅방 목록(메시지함). 목록 응답 형식.
 
@@ -872,7 +872,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 상대가 정지·탈퇴했거나 차단 관계가 되면 목록에서 제외한다. 과거 메시지 열람이 필요하면 `GET /chat-rooms/{roomId}`로 직접 접근한다.
 - 반복 호출: 멱등.
 
-### GET `/chat-rooms/{roomId}` 🔜
+### GET `/chat-rooms/{roomId}` ✅
 
 **이 API만 `RevealedProfile`을 반환한다.**
 
@@ -901,7 +901,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 응답에 `Cache-Control: no-store`를 붙인다.
 - 반복 호출: 멱등. 호출마다 새 임시 URL이 발급된다.
 
-### GET `/chat-rooms/{roomId}/messages` 🔜
+### GET `/chat-rooms/{roomId}/messages` ✅
 
 쿼리: `?cursor=&limit=` (오래된 순으로 거슬러 올라가는 커서)
 
@@ -923,7 +923,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 차단 후에도 기존 참여자는 **과거 메시지 조회만** 가능하다. 조회 시 내 읽음 위치를 갱신해 `unreadCount`에 반영한다.
 - 반복 호출: 멱등.
 
-### POST `/chat-rooms/{roomId}/messages` 🔜
+### POST `/chat-rooms/{roomId}/messages` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -946,12 +946,12 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 권한 | 구현 상태 |
 |---|---|---|---|
-| GET | `/me/blocks` | 로그인 | 🔜 |
-| POST | `/me/blocks` | 로그인 | 🔜 |
-| DELETE | `/me/blocks/{targetUserId}` | 로그인 | 🔜 |
-| POST | `/reports` | 로그인 | 🔜 |
+| GET | `/me/blocks` | 로그인 | ✅ |
+| POST | `/me/blocks` | 로그인 | ✅ |
+| DELETE | `/me/blocks/{targetUserId}` | 로그인 | ✅ |
+| POST | `/reports` | 로그인 | ✅ |
 
-### GET `/me/blocks` 🔜
+### GET `/me/blocks` ✅
 
 ```json
 {
@@ -968,7 +968,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 차단 목록에는 공개 이미지도 포함하지 않는다. 이름과 차단 시각만 제공한다. 상대가 탈퇴해도 항목은 유지되며 `displayName`은 `탈퇴한 사용자`로 대체한다.
 - 반복 호출: 멱등.
 
-### POST `/me/blocks` 🔜
+### POST `/me/blocks` ✅
 
 | 필드 | 타입 | 필수 |
 |---|---|---|
@@ -984,7 +984,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 차단하면 **양방향으로** 신규 요청·메시지 전송·상대 실제 사진 신규 URL 발급이 즉시 중단된다. 이미 발급된 임시 URL은 만료(최대 60초)까지 유효하며 회수할 수 없다. 기존 메시지는 양쪽 모두 조회만 가능하다.
 - 반복 호출: 멱등. 이미 차단된 상대면 기존 정보를 그대로 반환한다.
 
-### DELETE `/me/blocks/{targetUserId}` 🔜
+### DELETE `/me/blocks/{targetUserId}` ✅
 
 성공 `200`:
 
@@ -996,7 +996,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 차단 해제가 과거 추천 카드를 되살리지는 않는다. 다음 서비스 날짜 추천부터 후보에 다시 포함된다.
 - 반복 호출: 멱등.
 
-### POST `/reports` 🔜
+### POST `/reports` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -1018,13 +1018,13 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
   - 같은 대상·같은 사유로 처리 대기 중인 신고가 있으면 중복 생성하지 않는다.
 - 반복 호출: 멱등.
 
-## 10. 관리자 API ⏳
+## 10. 관리자 API ✅
 
 관리자 IP 허용 목록은 정확한 IPv4/IPv6 주소 또는 IPv4 CIDR(0~32)을 사용한다. 빈 prefix·범위 밖 옥텟·여러 slash·목록의 빈 항목 등 잘못된 항목이 하나라도 있으면 전체 목록을 거부한다. IPv6 CIDR은 현재 지원하지 않는다. 직접 연결 주소만 검사하며 X-Forwarded-For를 신뢰하지 않는다.
 
 배지 설정 변경 감사 기록은 해당 서비스 날짜의 변경 전 유효 값(이력이 없으면 기본값)과 변경 후 값을 모두 포함한다. 조회·설정 쓰기·감사 로그를 같은 Serializable 트랜잭션에서 처리하며, DB 동시성 충돌은 성공으로 처리하지 않는다.
 
-**전체 구현 상태 ⏳ — 담당·시점 미정.** 팀장의 Phase 2 백엔드 지시 범위에는 없고, 프론트엔드가 Phase 2에 관리자 화면을 만들기 때문에 계약만 먼저 확정한다. 누가 언제 구현할지 팀 합의가 필요하다.
+**전체 구현 완료.** 관리자 API 9개가 모두 동작하며 설정 변경은 감사 로그에 전후 값을 남긴다.
 
 공통 조건(`docs/SECURITY_OPERATIONS.md` 2절 기준):
 
@@ -1037,17 +1037,17 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 | Method | Path | 설명 | 구현 상태 |
 |---|---|---|---|
-| GET | `/admin/dashboard` | 운영 지표 | ⏳ |
-| GET | `/admin/users` | 사용자 목록 | ⏳ |
-| PATCH | `/admin/users/{userId}/sanction` | 제재 변경 | ⏳ |
-| GET | `/admin/reports` | 신고 목록 | ⏳ |
-| PATCH | `/admin/reports/{reportId}` | 신고 처리 | ⏳ |
-| GET | `/admin/settings` | 설정 조회 | ⏳ |
-| PUT | `/admin/settings/badge` | 배지 기준 변경 | ⏳ |
-| PUT | `/admin/settings/daily-refresh` | 다음 일자 선착순 N 변경 | ⏳ |
-| GET | `/admin/statistics/daily` | 일별 통계 | ⏳ |
+| GET | `/admin/dashboard` | 운영 지표 | ✅ |
+| GET | `/admin/users` | 사용자 목록 | ✅ |
+| PATCH | `/admin/users/{userId}/sanction` | 제재 변경 | ✅ |
+| GET | `/admin/reports` | 신고 목록 | ✅ |
+| PATCH | `/admin/reports/{reportId}` | 신고 처리 | ✅ |
+| GET | `/admin/settings` | 설정 조회 | ✅ |
+| PUT | `/admin/settings/badge` | 배지 기준 변경 | ✅ |
+| PUT | `/admin/settings/daily-refresh` | 다음 일자 선착순 N 변경 | ✅ |
+| GET | `/admin/statistics/daily` | 일별 통계 | ✅ |
 
-### GET `/admin/dashboard` ⏳
+### GET `/admin/dashboard` ✅
 
 쿼리: `?serviceDate=2026-10-27` (생략 시 오늘)
 
@@ -1073,7 +1073,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 집계 수치만 반환하며 개인정보는 포함하지 않는다.
 - 반복 호출: 멱등.
 
-### GET `/admin/users` ⏳
+### GET `/admin/users` ✅
 
 쿼리: `?status=ACTIVE&q=&cursor=&limit=`
 
@@ -1094,7 +1094,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 관리 목적에 필요한 최소 필드만 반환한다. 비밀번호 해시, 원본 사진 URL·object key, 채팅 본문은 포함하지 않는다.
 - 반복 호출: 멱등.
 
-### PATCH `/admin/users/{userId}/sanction` ⏳
+### PATCH `/admin/users/{userId}/sanction` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -1112,7 +1112,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 제재 상태는 신고와 달리 종결이 없고 서로 되돌릴 수 있다. 그래서 같은 대상에 서로 다른 제재가 겹쳐 들어오면 **먼저 반영된 값을 읽은 뒤에 온 요청은 그 위에 이어서 적용된다.** 읽은 값이 이미 바뀐 뒤였다면 `CONFLICT` 409 로 밀린다. 즉 겹친 두 요청이 모두 200 일 수 있고, 이때는 두 제재가 순서대로 적용된 것이며 감사 로그도 변경마다 한 건씩 남는다. 어느 경우든 상태가 겹쳐 쓰이거나 감사 로그가 누락되지는 않는다.
 - 반복 호출: 멱등. 같은 값으로 다시 호출하면 상태는 그대로이고 감사 로그도 추가로 남기지 않는다.
 
-### GET `/admin/reports` ⏳
+### GET `/admin/reports` ✅
 
 쿼리: `?status=PENDING&cursor=&limit=`
 
@@ -1133,7 +1133,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - `status`: `PENDING` `REVIEWING` `RESOLVED` `DISMISSED`
 - 반복 호출: 멱등.
 
-### PATCH `/admin/reports/{reportId}` ⏳
+### PATCH `/admin/reports/{reportId}` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -1147,7 +1147,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 신고는 한 번 결론이 나면 종결이다. 이미 `RESOLVED`·`DISMISSED` 인 신고를 다시 처리하면 `CONFLICT` 409 이고 결론·`resultNote` 는 바뀌지 않는다. `PENDING` → `REVIEWING` → 종결 진행은 허용한다.
 - 반복 호출: 멱등. 종결된 신고에 다시 호출해도 저장된 결론과 감사 로그는 늘지 않는다.
 
-### GET `/admin/settings` ⏳
+### GET `/admin/settings` ✅
 
 ```json
 {
@@ -1162,7 +1162,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 
 - 반복 호출: 멱등.
 
-### PUT `/admin/settings/badge` ⏳
+### PUT `/admin/settings/badge` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -1176,7 +1176,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: 배지는 최근 `windowDays`일의 **서로 다른 발신자** 기준으로 집계한다. 수치는 사용자에게 노출하지 않는다. 차단·제재·신고 검토 중 계정의 반응은 집계에서 제외한다.
 - 반복 호출: 멱등.
 
-### PUT `/admin/settings/daily-refresh` ⏳
+### PUT `/admin/settings/daily-refresh` ✅
 
 | 필드 | 타입 | 필수 | 제약 |
 |---|---|---|---|
@@ -1192,7 +1192,7 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - 특별 규칙: **다음 서비스 날짜부터** 적용한다. 당일 재고를 다시 채우지 않는다. 적용 일자를 서버가 계산하며 클라이언트가 지정할 수 없다.
 - 반복 호출: 멱등.
 
-### GET `/admin/statistics/daily` ⏳
+### GET `/admin/statistics/daily` ✅
 
 쿼리: `?from=2026-10-20&to=2026-10-27` (최대 90일)
 
