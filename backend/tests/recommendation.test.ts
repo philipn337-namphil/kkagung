@@ -20,6 +20,8 @@ let server: Server | null = null;
 let baseUrl = "";
 let db: Awaited<ReturnType<typeof loadPrisma>>;
 let jwtSecret = "";
+let jwtIssuer = "";
+let jwtAudience = "";
 let ids: Record<string, bigint> = {};
 let keptFortuneIds: bigint[] = [];
 let keptItemIds: bigint[] = [];
@@ -27,7 +29,7 @@ const createdBlockIds: bigint[] = [];
 
 const loadPrisma = async () => (await import("../src/prisma.js")).prisma;
 
-const tokenFor = (userId: bigint) => jwt.sign({ sub: userId.toString(), role: "USER" }, jwtSecret, { expiresIn: "12h" });
+const tokenFor = (userId: bigint) => jwt.sign({ role: "USER" }, jwtSecret, { subject: userId.toString(), expiresIn: "12h", issuer: jwtIssuer, audience: jwtAudience, jwtid: crypto.randomUUID() });
 
 const call = async (path: string, options: { method?: "GET" | "POST"; token?: string } = {}) => {
   const headers: Record<string, string> = {};
@@ -46,7 +48,7 @@ const openFor = (email: string) => call("/api/v1/daily/open", { method: "POST", 
 
 beforeAll(async () => {
   const { app } = await import("../src/app.js");
-  jwtSecret = (await import("../src/config.js")).config.jwtSecret;
+  const appConfig = (await import("../src/config.js")).config; jwtSecret = appConfig.jwtSecret; jwtIssuer = appConfig.jwtIssuer; jwtAudience = appConfig.jwtAudience;
   db = await loadPrisma();
 
   const users = await db.user.findMany({ where: { email: { in: SEED_EMAILS } }, select: { id: true, email: true } });

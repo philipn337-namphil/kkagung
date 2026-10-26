@@ -29,7 +29,10 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       where: { id: userId }, select: { id: true, role: true, status: true, adultVerifiedAt: true },
     });
     if (!user) return fail(res, 401, "UNAUTHORIZED", "유효하지 않은 계정입니다.");
-    if (user.status === "SUSPENDED" || user.status === "WITHDRAWN" || (user.role === "ADMIN" && user.status !== "ACTIVE")) {
+    // 정지는 명세서(SUSPENDED_USER)와 로그인 응답에 맞춰 별도 코드를 쓴다.
+    // 한 코드로 합치면 각 라우트의 SUSPENDED_USER 처리가 죽은 코드가 되고, 프론트가 상황을 구분하지 못한다.
+    if (user.status === "SUSPENDED") return fail(res, 403, "SUSPENDED_USER", "이용이 정지된 계정입니다.");
+    if (user.status === "WITHDRAWN" || (user.role === "ADMIN" && user.status !== "ACTIVE")) {
       return fail(res, 403, "FORBIDDEN", "이용할 수 없는 계정입니다.");
     }
     if (!user.adultVerifiedAt) return fail(res, 403, "ADULT_VERIFICATION_REQUIRED", "성인 인증이 필요합니다.");

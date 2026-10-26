@@ -4,9 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // app.ts 는 불러오는 시점에 ENABLE_TEST_ACCOUNTS 를 읽는다. 그래서 케이스마다
 // 환경변수를 먼저 정하고 모듈을 새로 불러온다. 시드 계정은 읽기만 하며 추가·수정·삭제하지 않는다.
 const SEED_DOMAIN = "@kkagung.local";
-const DEMO_ACCOUNT_ID = 2;
-const SUSPENDED_ACCOUNT_ID = 9;
+const DEMO_EMAIL = `demo${SEED_DOMAIN}`;
+const SUSPENDED_EMAIL = `suspended${SEED_DOMAIN}`;
 const UNKNOWN_ACCOUNT_ID = 99999;
+// 자동 증가 ID 는 개발 DB 마다 다르다. 시드가 보장하는 것은 이메일이므로 ID 는 응답에서 찾는다.
+const SEED_EMAILS = ["admin", "demo", "user1", "user2", "user3", "user4", "user5", "user6", "suspended"]
+  .map((name) => `${name}${SEED_DOMAIN}`);
 
 type Env = { enabled: boolean; nodeEnv?: string };
 
@@ -40,6 +43,13 @@ const call = async (baseUrl: string, path: string, method: "GET" | "POST" = "GET
   return { status: response.status, text, body: JSON.parse(text) };
 };
 
+const accountIdFor = async (baseUrl: string, email: string) => {
+  const { body } = await call(baseUrl, "/api/v1/dev/test-accounts");
+  const found = (body.data.accounts as { accountId: string; email: string }[]).find((account) => account.email === email);
+  if (found === undefined) throw new Error(`시드 계정을 찾을 수 없습니다: ${email}`);
+  return found.accountId;
+};
+
 afterEach(async () => {
   if (server) {
     const closing = server;
@@ -51,13 +61,14 @@ afterEach(async () => {
 });
 
 describe("GET /api/v1/dev/test-accounts", () => {
-  it("스위치를 켜면 시드 계정 9개를 반환한다", async () => {
+  it("스위치를 켜면 시드 계정을 모두 반환한다", async () => {
     const baseUrl = await start({ enabled: true });
     const { status, body } = await call(baseUrl, "/api/v1/dev/test-accounts");
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
-    expect(body.data.accounts).toHaveLength(9);
+    const emails = (body.data.accounts as { email: string }[]).map((account) => account.email);
+    for (const seed of SEED_EMAILS) expect(emails).toContain(seed);
     for (const account of body.data.accounts) expect(account.email.endsWith(SEED_DOMAIN)).toBe(true);
   });
 
@@ -91,7 +102,7 @@ describe("GET /api/v1/dev/test-accounts", () => {
 describe("POST /api/v1/dev/test-accounts/:accountId/token", () => {
   it("일반 시드 계정은 토큰을 발급한다", async () => {
     const baseUrl = await start({ enabled: true });
-    const { status, body } = await call(baseUrl, `/api/v1/dev/test-accounts/${DEMO_ACCOUNT_ID}/token`, "POST");
+    const { status, body } = await call(baseUrl, `/api/v1/dev/test-accounts/${await accountIdFor(baseUrl, DEMO_EMAIL)}/token`, "POST");
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
@@ -103,7 +114,7 @@ describe("POST /api/v1/dev/test-accounts/:accountId/token", () => {
 
   it("정지된 계정은 403 SUSPENDED_USER 로 거절한다", async () => {
     const baseUrl = await start({ enabled: true });
-    const { status, body } = await call(baseUrl, `/api/v1/dev/test-accounts/${SUSPENDED_ACCOUNT_ID}/token`, "POST");
+    const { status, body } = await call(baseUrl, `/api/v1/dev/test-accounts/${await accountIdFor(baseUrl, SUSPENDED_EMAIL)}/token`, "POST");
 
     expect(status).toBe(403);
     expect(body.error.code).toBe("SUSPENDED_USER");

@@ -14,11 +14,13 @@ let server: Server | null = null;
 let baseUrl = "";
 let db: Awaited<ReturnType<typeof loadPrisma>>;
 let jwtSecret = "";
+let jwtIssuer = "";
+let jwtAudience = "";
 let ids: Record<string, bigint> = {};
 let seedStatus: Map<string, string> = new Map();
 
 const loadPrisma = async () => (await import("../src/prisma.js")).prisma;
-const tokenFor = (userId: bigint, role: "USER" | "ADMIN") => jwt.sign({ sub: userId.toString(), role }, jwtSecret, { expiresIn: "12h" });
+const tokenFor = (userId: bigint, role: "USER" | "ADMIN") => jwt.sign({ role }, jwtSecret, { subject: userId.toString(), expiresIn: "12h", issuer: jwtIssuer, audience: jwtAudience, jwtid: crypto.randomUUID() });
 
 const call = async (path: string, options: { method?: "GET" | "POST" | "PATCH" | "PUT"; token?: string; body?: unknown } = {}) => {
   const headers: Record<string, string> = {};
@@ -65,7 +67,7 @@ const makeReport = () =>
 
 beforeAll(async () => {
   const { app } = await import("../src/app.js");
-  jwtSecret = (await import("../src/config.js")).config.jwtSecret;
+  const appConfig = (await import("../src/config.js")).config; jwtSecret = appConfig.jwtSecret; jwtIssuer = appConfig.jwtIssuer; jwtAudience = appConfig.jwtAudience;
   db = await loadPrisma();
 
   const users = await db.user.findMany({ where: { email: { in: EMAILS } }, select: { id: true, email: true, status: true } });
@@ -207,7 +209,11 @@ describe("PATCH /api/v1/admin/users/:userId/sanction", () => {
     }
   });
 
-  it("동시에 두 번 바꾸면 한 번만 반영된다", async () => {
+  // 제재 상태는 서로 되돌릴 수 있는 값이라 "동시에 오면 한 번만 반영" 이라는 기준을 세울 수 없다.
+  // 두 요청이 같은 값을 읽었으면 한쪽이 409 로 밀리고, 한쪽이 먼저 반영된 뒤 다른 쪽이 읽었으면
+  // 두 제재가 순서대로 적용된다. 둘 다 정상 동작이고 어느 쪽인지는 타이밍이 정한다.
+  // 그래서 성공 횟수가 아니라, 상태가 겹쳐 쓰이지 않고 감사 로그가 적용된 변경과 정확히 일치하는지를 본다.
+  it("동시에 두 번 바꿔도 상태가 겹쳐 쓰이지 않고 감사 로그가 변경과 일치한다", async () => {
     freeze();
     const targetId = ids["user1@kkagung.local"];
     try {
@@ -216,9 +222,31 @@ describe("PATCH /api/v1/admin/users/:userId/sanction", () => {
         call(`/api/v1/admin/users/${targetId}/sanction`, { method: "PATCH", token: adminToken(), body: { status: "RECOMMENDATION_BLOCKED", reason: "동시 2" } }),
       ]);
 
-      for (const result of results) expect(result.status).toBeLessThan(500);
-      expect(results.filter((result) => result.status === 200)).toHaveLength(1);
-      expect(await db.adminAuditLog.count({ where: { action: "USER_SANCTION", targetId } })).toBe(1);
+      // 밀린 요청은 409 여야 한다. 500 이나 그 밖의 코드로 새면 안 된다.
+      const applied = results.filter((result) => result.status === 200);
+      expect(applied.length).toBeGreaterThanOrEqual(1);
+      for (const result of results) {
+        if (result.status !== 200) expect(result.status).toBe(409);
+        else expect(["SUSPENDED", "RECOMMENDATION_BLOCKED"]).toContain(result.body.data.status);
+      }
+
+      // 감사 로그는 적용된 변경 수와 같아야 한다. 하나라도 비거나 중복되면 실패다.
+      const logs = await db.adminAuditLog.findMany({
+        where: { action: "USER_SANCTION", targetId },
+        orderBy: { id: "asc" },
+        select: { beforeValue: true, afterValue: true },
+      });
+      expect(logs).toHaveLength(applied.length);
+
+      // ACTIVE 에서 시작해 before/after 가 끊기지 않고 이어지고, 마지막 값이 실제 상태와 같아야 한다.
+      // 중간에 끊기면 두 변경이 서로를 덮어썼다는 뜻이다.
+      let expectedBefore = "ACTIVE";
+      for (const log of logs) {
+        expect((log.beforeValue as { status: string }).status).toBe(expectedBefore);
+        expectedBefore = (log.afterValue as { status: string }).status;
+      }
+      const stored = await db.user.findUniqueOrThrow({ where: { id: targetId }, select: { status: true } });
+      expect(stored.status).toBe(expectedBefore);
     } finally {
       await db.user.update({ where: { id: targetId }, data: { status: "ACTIVE" } });
     }
@@ -261,6 +289,26 @@ describe("신고 처리", () => {
     expect(await db.adminAuditLog.count({ where: { action: "REPORT_HANDLE", targetId: report.id } })).toBe(1);
   });
 
+  it("이미 처리된 신고를 다시 처리하면 409 이고 결론이 바뀌지 않는다", async () => {
+    freeze();
+    const report = await makeReport();
+
+    const first = await call(`/api/v1/admin/reports/${report.id}`, { method: "PATCH", token: adminToken(), body: { status: "RESOLVED", resultNote: "1차 처리" } });
+    expect(first.status).toBe(200);
+
+    const again = await call(`/api/v1/admin/reports/${report.id}`, { method: "PATCH", token: adminToken(), body: { status: "DISMISSED", resultNote: "결론 덮어쓰기" } });
+    expect(again.status).toBe(409);
+    expect(again.body.error.code).toBe("CONFLICT");
+
+    const stored = await db.report.findUniqueOrThrow({ where: { id: report.id }, select: { status: true, resultNote: true } });
+    expect(stored.status).toBe("RESOLVED");
+    expect(stored.resultNote).toBe("1차 처리");
+    expect(await db.adminAuditLog.count({ where: { action: "REPORT_HANDLE", targetId: report.id } })).toBe(1);
+  });
+
+  // 신고는 한 번 결론이 나면 종결이므로 제재와 달리 "한 번만 반영" 이 성립한다.
+  // 두 요청이 모두 PENDING 을 읽으면 조건부 UPDATE 가 한쪽을 밀어내고,
+  // 한쪽이 먼저 종결시킨 뒤 다른 쪽이 읽으면 종결 상태 가드가 막는다. 어느 순서든 결과가 같다.
   it("동시에 두 번 처리하면 한 번만 반영된다", async () => {
     freeze();
     const report = await makeReport();
@@ -270,9 +318,16 @@ describe("신고 처리", () => {
       call(`/api/v1/admin/reports/${report.id}`, { method: "PATCH", token: adminToken(), body: { status: "DISMISSED", resultNote: "동시 2" } }),
     ]);
 
-    for (const result of results) expect(result.status).toBeLessThan(500);
+    for (const result of results) {
+      if (result.status !== 200) expect(result.status, `밀린 요청 응답: ${result.text}`).toBe(409);
+    }
     expect(results.filter((result) => result.status === 200)).toHaveLength(1);
     expect(await db.adminAuditLog.count({ where: { action: "REPORT_HANDLE", targetId: report.id } })).toBe(1);
+
+    // 남은 결론은 이긴 요청의 것이어야 한다.
+    const winner = results.find((result) => result.status === 200)!;
+    const stored = await db.report.findUniqueOrThrow({ where: { id: report.id }, select: { status: true } });
+    expect(stored.status).toBe(winner.body.data.status);
   });
 
   it("없는 신고는 404, 잘못된 값은 400 이다", async () => {

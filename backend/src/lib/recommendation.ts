@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import { publicObjectUrl } from "./objectStorage.js";
 
 // 서비스 하루는 한국 시간 오전 8시부터다. 8시 이전 요청은 전날 서비스 날짜에 속한다.
 const KST_OFFSET_HOURS = 9;
@@ -152,11 +153,10 @@ const pickPublicImage = (images: { imageType: string; objectKey: string }[]) =>
   images.find((image) => image.imageType === "AI_PUBLIC") ?? images.find((image) => image.imageType === "BLURRED_PUBLIC") ?? null;
 
 const publicImageUrl = (chosen: { imageType: string; objectKey: string }) => {
-  const endpoint = (process.env.OBJECT_STORAGE_ENDPOINT ?? "").replace(/\/$/, "");
-  const bucket = process.env.OBJECT_STORAGE_BUCKET_PUBLIC ?? "";
+  const url = publicObjectUrl(chosen.objectKey);
   // 기준 주소가 설정되지 않은 환경에서는 URL 을 만들 수 없으므로 null 을 준다.
-  if (endpoint === "" || bucket === "") return null;
-  return { url: `${endpoint}/${bucket}/${chosen.objectKey}`, type: chosen.imageType };
+  if (url === null) return null;
+  return { url, type: chosen.imageType };
 };
 
 // 하트·채팅 목록도 같은 공개 카드 모양을 쓴다. 변환을 한 곳에만 두기 위해 내보낸다.
