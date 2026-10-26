@@ -1,22 +1,17 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { config } from "../config.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { rateLimit } from "../middleware/rateLimit.js";
+import { issueAccessToken } from "../lib/accessToken.js";
 import { tokenHash } from "../lib/tokenHash.js";
 
 const registerSchema = z.object({ email: z.email(), password: z.string().min(8), adultVerified: z.literal(true) });
 const loginSchema = z.object({ email: z.email(), password: z.string().min(1) });
-const issueToken = (user: { id: bigint; role: "USER" | "ADMIN" }) => jwt.sign(
-  { role: user.role }, config.jwtSecret,
-  { subject: user.id.toString(), algorithm: config.jwtAlgorithm, expiresIn: config.jwtExpiresIn,
-    issuer: config.jwtIssuer, audience: config.jwtAudience, jwtid: randomUUID() },
-);
 export const authRouter = Router();
 authRouter.use("/login", rateLimit("login-ip", 10, 900), rateLimit("login-account", 10, 900, true));
 authRouter.use("/register", rateLimit("register-ip", 10, 900));
@@ -28,7 +23,7 @@ authRouter.post("/register", async (req, res, next) => {
     const exists = await prisma.user.findUnique({ where: { email: input.email } });
     if (exists) return fail(res, 409, "EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다.");
     const user = await prisma.user.create({ data: { email: input.email, passwordHash: await bcrypt.hash(input.password, 12), adultVerifiedAt: new Date() } });
-    return ok(res, { token: issueToken(user), user: { id: user.id, email: user.email, role: user.role } }, 201);
+    return ok(res, { token: issueAccessToken(user), user: { id: user.id, email: user.email, role: user.role } }, 201);
   } catch (error) { next(error); }
 });
 
@@ -41,7 +36,7 @@ authRouter.post("/login", async (req, res, next) => {
     if (user.status === "WITHDRAWN") return fail(res, 403, "FORBIDDEN", "이용할 수 없는 계정입니다.");
     if (!user.adultVerifiedAt) return fail(res, 403, "ADULT_VERIFICATION_REQUIRED", "성인 인증이 필요합니다.");
     await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
-    return ok(res, { token: issueToken(user), user: { id: user.id, email: user.email, role: user.role } });
+    return ok(res, { token: issueAccessToken(user), user: { id: user.id, email: user.email, role: user.role } });
   } catch (error) { next(error); }
 });
 
