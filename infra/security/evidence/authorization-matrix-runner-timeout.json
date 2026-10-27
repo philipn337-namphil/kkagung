@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-10-27T05:44:53.817Z",
+  "mode": "real isolated portable MySQL; synthetic data",
+  "status": "failed",
+  "steps": {
+    "initialize-new-data-directory": true,
+    "database-ready": true,
+    "mysql-version": true,
+    "source-commit": true,
+    "prisma-generate": true,
+    "migration": false
+  },
+  "cloudStorageVerified": false,
+  "productionRpoMeasured": false,
+  "productionRtoMeasured": false,
+  "mysqlVersion": "8.4.13",
+  "backendCommit": "7ceb55e0210e32185d2360baa2e034984fca5313",
+  "failedStage": "migration",
+  "serverExitCode": null,
+  "serverStopped": true,
+  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-2e1932ebf44a646b"
+}

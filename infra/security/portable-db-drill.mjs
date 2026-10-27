@@ -5,6 +5,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { makePlan, databaseUrl } from './isolated-db-drill.mjs';
+import { sameSchema } from './schema-equivalence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [mysqlHomeArg, backendArg] = process.argv.slice(2);
@@ -78,8 +79,8 @@ try {
     OBJECT_STORAGE_BUCKET_PUBLIC: 'kkagung-drill-public' };
   const node = (args, timeout) => exec(process.execPath, args, testEnv, undefined, backend, timeout);
   const generatedSchema = resolve(backend, 'node_modules/.prisma/client/schema.prisma');
-  if (existsSync(generatedSchema) && readFileSync(generatedSchema, 'utf8').replaceAll('\r\n', '\n') === readFileSync(resolve(backend, 'prisma/schema.prisma'), 'utf8').replaceAll('\r\n', '\n')) {
-    evidence.steps['prisma-generate'] = true; evidence.prismaClient = 'reused-identical-generated-schema';
+  if (existsSync(generatedSchema) && sameSchema(readFileSync(generatedSchema, 'utf8'), readFileSync(resolve(backend, 'prisma/schema.prisma'), 'utf8'))) {
+    evidence.steps['prisma-generate'] = true; evidence.prismaClient = 'reused-token-equivalent-generated-schema';
   } else check(node(['node_modules/prisma/build/index.js', 'generate']), 'prisma-generate');
   check(node(['node_modules/prisma/build/index.js', 'migrate', 'deploy']), 'migration');
   check(node(['--import', './node_modules/tsx/dist/loader.mjs', 'prisma/seed.ts']), 'synthetic-seed');
@@ -103,15 +104,25 @@ try {
     cases: parsed.testResults.flatMap(file => file.assertionResults.map(item => ({ name: item.fullName, status: item.status }))) };
   }
   const auditPath = resolve(root, 'infra/security/evidence/live-db-audit.json');
-  const audit = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-db-audit.mjs'), backend, auditPath]);
-  evidence.steps['live-db-audit'] = audit.status === 0 && !audit.error;
+  if (process.env.SECURITY_MATRIX_ONLY === '1') evidence.steps['live-db-audit'] = null;
+  else {
+    const audit = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-db-audit.mjs'), backend, auditPath]);
+    evidence.steps['live-db-audit'] = audit.status === 0 && !audit.error;
+  }
   if (process.env.SECURITY_IMAGE_STATE_AUDIT === '1') {
     const imageAudit = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-image-state-audit.mjs'), backend,
       resolve(root, 'infra/security/evidence/live-image-state-audit.json')]);
     evidence.steps['image-state-audit'] = imageAudit.status === 0 && !imageAudit.error;
     writeFileSync(resolve(runDir, 'image-audit-private.stderr.log'), imageAudit.stderr ?? '');
   }
-  const started = performance.now();
+    if (process.env.SECURITY_AUTH_MATRIX === '1') {
+      const matrix = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-authorization-matrix.mjs'), backend,
+        resolve(root, 'infra/security/evidence/authorization-matrix.json')], 300000);
+      evidence.steps['authorization-matrix'] = matrix.status === 0 && !matrix.error;
+      console.log(`authorization-matrix: ${evidence.steps['authorization-matrix'] ? 'PASS' : 'FAIL'}`);
+      writeFileSync(resolve(runDir, 'authorization-matrix-private.stderr.log'), matrix.stderr ?? '');
+    }
+    const started = performance.now();
   const dump = check(exec(resolve(mysqlHome, 'bin/mysqldump.exe'), ['--no-defaults', '--protocol=TCP',
     '--host=127.0.0.1', `--port=${port}`, '--user=root', '--single-transaction', '--no-tablespaces',
     '--set-gtid-purged=OFF', database], env), 'backup');
@@ -134,7 +145,8 @@ try {
     checksumMethod: 'SHA-256 of primary-key-ordered logical row dump; no timestamps/comments/DDL',
     sourceSha256: beforeHash, restoredSha256: afterHash,
     localDumpRestoreVerifyMs: Math.round(performance.now() - started) };
-  const auditsPassed = evidence.steps['live-db-audit'] && evidence.steps['image-state-audit'] !== false;
+  const auditsPassed = evidence.steps['live-db-audit'] !== false && evidence.steps['image-state-audit'] !== false &&
+    (process.env.SECURITY_MATRIX_ONLY === '1' ? evidence.steps['authorization-matrix'] === true : evidence.steps['authorization-matrix'] !== false);
   evidence.status = auditsPassed && evidence.steps['backend-tests'] === null ? 'focused-only'
     : auditsPassed && evidence.steps['backend-tests'] ? 'passed-local-db-only' : 'failed-tests';
 } catch (error) { evidence.failedStage = error.message; }
@@ -149,7 +161,7 @@ finally {
   }
   // Retain only the disposable local data directory for diagnosis; never copy it into Git.
   evidence.runtimeDirectory = runDir;
-  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : process.env.SECURITY_TARGETED_BACKEND === '1' ? 'portable-db-recheck' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
+  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_MATRIX_ONLY === '1' ? 'portable-db-matrix' : process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : process.env.SECURITY_TARGETED_BACKEND === '1' ? 'portable-db-recheck' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
   console.log(JSON.stringify({ status: evidence.status, steps: evidence.steps, failedStage: evidence.failedStage,
     tests: evidence.tests && { passed: evidence.tests.passed, failed: evidence.tests.failed, pending: evidence.tests.pending },
     restore: evidence.restore, serverStopped: evidence.serverStopped }, null, 2));

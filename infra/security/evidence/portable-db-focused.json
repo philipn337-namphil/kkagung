@@ -1,7 +1,7 @@
 {
-  "recordedAt": "2026-10-27T04:39:50.606Z",
+  "recordedAt": "2026-10-27T05:33:10.295Z",
   "mode": "real isolated portable MySQL; synthetic data",
-  "status": "focused-only",
+  "status": "failed-tests",
   "steps": {
     "initialize-new-data-directory": true,
     "database-ready": true,
@@ -14,6 +14,7 @@
     "backend-tests": null,
     "live-db-audit": true,
     "image-state-audit": true,
+    "authorization-matrix": false,
     "backup": true,
     "restore-database": true,
     "restore-import": true,
@@ -25,7 +26,7 @@
   "productionRpoMeasured": false,
   "productionRtoMeasured": false,
   "mysqlVersion": "8.4.13",
-  "backendCommit": "856d507d1b5a4e8483e2925cc4b8d57ded23f5f5",
+  "backendCommit": "7ceb55e0210e32185d2360baa2e034984fca5313",
   "testReport": {
     "notRun": true,
     "reason": "explicit focused security audit; full suite evidence retained separately"
@@ -35,11 +36,11 @@
     "tables": 20,
     "rowCountsAndChecksumsMatch": true,
     "checksumMethod": "SHA-256 of primary-key-ordered logical row dump; no timestamps/comments/DDL",
-    "sourceSha256": "760bcd2755f32b167d61c9db3c8c912d6c4c17eb645628aa838d8a072d1f1580",
-    "restoredSha256": "760bcd2755f32b167d61c9db3c8c912d6c4c17eb645628aa838d8a072d1f1580",
-    "localDumpRestoreVerifyMs": 6182
+    "sourceSha256": "c232b116536e9953e0ac1ee123cbf86348191a2811957702d14fef9b836575c1",
+    "restoredSha256": "c232b116536e9953e0ac1ee123cbf86348191a2811957702d14fef9b836575c1",
+    "localDumpRestoreVerifyMs": 11918
   },
   "serverExitCode": 0,
   "serverStopped": true,
-  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-1699801acae50876"
+  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-c825df8dfd9ba932"
 }

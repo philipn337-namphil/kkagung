@@ -262,6 +262,7 @@ describe('Phase 2 integration gates: implementation/infrastructure required', ()
   // live-image-state-audit.mjs and the selected real-DB images.test.ts suite.
   // These two gates execute against real MySQL in live-db-audit.mjs via portable-db-drill.mjs:
   // blocked pairs cannot create/accept requests or send messages; durable before/after admin audit.
-  it.skip('recommendation/heart/chat ownership, sanction and withdrawal restrictions enforced', () => {});
+  // Ownership and 75 account-status/block contexts execute against real MySQL
+  // in live-authorization-matrix.mjs; see evidence/authorization-matrix.json.
   it.skip('isolated DB/object/NAS restore meets measured RPO and RTO', () => {});
 });
