@@ -22,6 +22,8 @@
 | `OBJECT_STORAGE_BUCKET_PRIVATE` | `kkagung-images-private` | 사진 업로드 503 |
 | `OBJECT_STORAGE_ACCESS_KEY` / `SECRET_KEY` | NCP 인증키 | 사진 업로드 503 |
 | `ENABLE_TEST_ACCOUNTS` | 비움 | 운영에서는 켜도 라우터가 등록되지 않지만 비워 둔다 |
+| `APP_IMAGE` | `<레지스트리>.kr.ncr.ntruss.com/kkagung-api:<태그>` | Init Script 가 기동 전에 멈춘다 |
+| `NCP_ACCESS_KEY` / `NCP_SECRET_KEY` | NCP API 인증키 | 레지스트리 로그인 실패로 기동하지 않는다 |
 | **`ADMIN_ALLOWED_IP_CIDRS`** | 관리자 접속 대역 | **운영에서 비우면 관리자 API 가 전부 403 이다.** 개발에서만 "제한 없음"으로 동작한다 |
 
 `TRUST_PROXY`를 빠뜨리면 기동은 되지만 부하가 몰리는 순간 전원이 429 를 맞는다. 배포 점검 항목에 반드시 넣는다.
@@ -29,7 +31,33 @@
 ### 시크릿을 두는 곳
 
 `.env` 파일을 서버 이미지에 굽지 않는다. 이미지가 유출되면 키가 함께 나간다.
-NCP 콘솔의 서버 환경변수 또는 Init Script 가 기동 시점에 주입하고, 값 자체는 저장소·이미지·로그 어디에도 남기지 않는다.
+
+**NCP VPC 서버 생성 화면에는 환경변수를 넣는 칸이 없다.** 고를 수 있는 것은 미리 콘솔에
+저장해 둔 Init Script 하나뿐이다. 값을 스크립트 바깥에서 넘길 수단이 없다.
+
+검토한 대안과 그 한계:
+
+| 대안 | 왜 쓰지 않나 |
+|---|---|
+| Secret Manager | `Get Secret Value` 호출에 `x-ncp-iam-access-key` 와 서명 헤더가 필요하다. 비밀을 가져오려고 비밀이 먼저 있어야 한다 |
+| Server Role | 서버에 역할을 붙여 키 없이 호출하는 방식이 KMS 문서에는 있으나, Secret Manager 에도 적용되는지 문서로 확인되지 않았다. 확인 안 된 경로에 배포를 걸지 않는다 |
+
+그래서 **Init Script 본문에 값을 직접 적는다.** 저장소의 `infra/ncp/init-script.sh` 는
+값이 빈 템플릿으로 두고, 값을 채운 사본은 콘솔에만 둔다.
+
+```sh
+# 저장소 (커밋하는 것)          # 콘솔 (커밋하지 않는 것)
+DATABASE_URL=""                DATABASE_URL="mysql://kkagung_app:<비밀번호>@<주소>:3306/kkagung"
+JWT_SECRET=""                  JWT_SECRET="<32바이트 이상 무작위>"
+```
+
+템플릿은 값이 비면 기동 전에 멈춘다. 채우지 않은 채로 올려도 조용히 잘못 뜨지 않는다.
+
+**감수하는 것:** 콘솔 접근 권한이 있는 사람에게 값이 평문으로 보인다. 교육용 데모 범위에서
+받아들인다. 실서비스로 전환한다면 Server Role 적용 여부를 먼저 확인하고 Secret Manager 로 옮긴다.
+
+**그래도 지키는 것:** 값이 채워진 사본을 저장소에 커밋하지 않는다. 이미지에도 굽지 않는다.
+`.env.example` 에는 키 이름만 둔다.
 
 ### 마이그레이션은 배포 단계에서 한 번만
 
@@ -82,11 +110,16 @@ NATGW   kkagung-natgw                공인 IP 211.233.206.191 / 사설 10.0.2.6
 
 ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서버가 늘어도 규칙을 고치지 않기 위해서다.
 
-| ACG | 인바운드 허용 |
-|---|---|
-| `kkagung-acg-lb` | 인터넷 → 443 |
-| `kkagung-acg-app` | `kkagung-acg-lb` → 8080 |
-| `kkagung-acg-db` | `kkagung-acg-app` → 3306 |
+| ACG | 인바운드 허용 | 아웃바운드 허용 |
+|---|---|---|
+| `kkagung-acg-lb` | 인터넷 → 443 | `kkagung-acg-app` → 8080 |
+| `kkagung-acg-app` | `kkagung-acg-lb` → 8080 | **열어야 한다.** 아래 참고 |
+| `cloud-mysql-*` | `kkagung-acg-app` → 3306 | Cloud DB 가 자동으로 만든다 |
+
+**아웃바운드는 기본이 비어 있고, NCP ACG 는 규칙에 없으면 막는다.**
+`kkagung-acg-app` 의 아웃바운드를 열지 않으면 Container Registry 와 Object Storage 로 나가지 못한다.
+둘 다 공인 주소라 NAT Gateway 와 라우트가 전부 맞아도 소용이 없다.
+증상은 `docker pull` 타임아웃 하나뿐이라, 없는 NAT 문제를 먼저 의심하게 된다.
 
 NACL 은 서브넷 단위로 위 경로 외의 인·아웃바운드를 차단한다.
 
@@ -167,6 +200,7 @@ Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 
 |---|---|
 | `kkagung-images-public` | 익명 읽기 허용. AI·흐림 이미지만 들어간다 |
 | `kkagung-images-private` | 비공개. 원본만 들어간다. 서버가 발급한 서명 URL 로만 읽는다 |
+| `kkagung-registry` | 비공개. Container Registry 전용. 사진과 섞지 않는다(3단계 참고) |
 
 애플리케이션에는 **버킷 생성 권한을 주지 않는다.** 로컬에서만 없으면 만들고, 운영에서는 인프라가 정책까지 포함해 미리 만든다.
 
@@ -212,20 +246,97 @@ curl -s -o /dev/null -w '%{http_code}
 
 ## 3. 앱 서버와 로드밸런서
 
-1. 서버 이미지에 Docker 와 애플리케이션 이미지를 포함한다
-2. Init Script 가 환경변수를 주입하고 컨테이너를 기동한다 — `infra/ncp/init-script.sh`
-   - 비밀값은 스크립트에 적지 않는다. 콘솔의 서버 환경변수로 넘기고 스크립트는 읽기만 한다
+### 이미지는 Container Registry 를 거친다
+
+서버 이미지에는 Docker 만 넣고, 애플리케이션 이미지는 기동할 때 받는다.
+이미지를 서버 이미지에 구우면 백엔드를 한 줄 고칠 때마다 서버 이미지를 다시 만들어야 하고,
+Auto Scaling 으로 증설된 서버가 옛 코드로 뜬다.
+
+레지스트리 주소는 공인이다. VPC 에서는 Private Endpoint 를 쓸 수 없으므로(Classic 전용)
+**앱 서브넷의 NAT Gateway 경로가 여기서 쓰인다.** 경로가 없으면 `docker pull` 에서 멈춘다.
+
+로그인 계정은 Object Storage 와 같은 NCP API 인증키다. Access Key ID 가 아이디,
+Secret Key 가 비밀번호다.
+
+```bash
+# 로컬 또는 CI 에서 한 번
+docker build -t "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)" backend
+printf '%s' "$NCP_SECRET_KEY" | docker login "$REGISTRY" -u "$NCP_ACCESS_KEY" --password-stdin
+docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
+```
+
+태그는 커밋 해시로 둔다. `latest` 로 두면 증설된 서버가 어떤 코드로 떴는지 알 수 없고,
+되돌릴 지점도 사라진다.
+
+### 확정된 값
+
+```
+레지스트리            kkagung
+Public Endpoint      kkagung.kr.ncr.ntruss.com      ← VPC 에서는 이쪽을 쓴다
+Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에서 쓸 수 없다
+저장 버킷             kkagung-registry
+```
+
+### 순서
+
+1. **레지스트리 전용 버킷을 먼저 만든다** — `kkagung-registry`
+   레지스트리 생성 폼에서 저장 버킷을 고르는데, 목록에 사진 버킷만 떠서 모르고 고르기 쉽다.
+   원본 사진 버킷은 "수락 전 신원 노출을 막는" 경계다(D-01). 성격이 다른 도커 레이어를 섞으면
+   그 경계가 흐려지고, 버킷 단위 권한·수명주기·용량이 서로 얽힌다.
+   업로드 회귀 테스트도 그 버킷에 `ListObjectsV2` 를 쓰므로, 설정이 운영 버킷을 가리키면
+   레지스트리 객체까지 집계한다.
+2. Container Registry 에 레지스트리를 만들고 저장 버킷으로 위 버킷을 고른 뒤, 아래 명령으로 이미지를 올린다
+3. **서버 이미지를 만든다.** `kkagung-sn-app` 은 비공인이라 SSH 로 들어갈 수 없다.
+   공인 일반 서브넷에 임시 서버를 띄워 만들고, 끝나면 반납한다.
+   서버 이미지는 서브넷과 무관하게 재사용되므로, 진짜 앱 서버는 `kkagung-sn-app` 에 그대로 띄운다.
+
+   ```
+   a. 서브넷 kkagung-sn-build (10.0.3.0/24, KR-1, 공인, 일반) + ACG kkagung-acg-build 생성
+      ACG 인바운드는 TCP 22 를 작업자 IP 한 대로만 연다
+   b. 임시 서버를 띄워 SSH 로 접속, Docker 설치
+      애플리케이션 이미지는 넣지 않는다. 기동할 때 레지스트리에서 받는다
+   c. 서버 이미지 생성
+   d. 임시 서버·공인 IP·서브넷·ACG 반납
+   ```
+4. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다
+   - **이 ACG 의 아웃바운드가 열려 있어야 한다**(1단계 참고). 비어 있으면 `docker pull` 에서 멈춘다
+5. Init Script 를 먼저 콘솔에 등록하고(서버 생성 화면에서 고르려면 미리 있어야 한다),
+   서버 설정 단계에서 그 스크립트를 고른다 — `infra/ncp/init-script.sh`
+   - 등록할 때 상단 블록의 큰따옴표 안을 채운다. 채운 사본은 콘솔에만 둔다
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
+   - 레지스트리 비밀번호는 표준입력으로 넘긴다. 인자로 주면 `ps` 출력에 그대로 보인다
+   - 받아오기를 먼저 하고 기존 컨테이너를 지운다. 반대로 하면 `pull` 이 실패했을 때
+     되돌릴 것 없이 서비스만 내려간다
+   - 끝나면 `docker logout` 한다. 자격증명이 인스턴스의 `~/.docker/config.json` 에 남는다
    - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
    - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
-3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다.
-   이 서브넷의 Route Table 에 NAT Gateway 경로가 있어야 Object Storage 에 닿는다(1단계 참고)
-4. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
-5. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
+6. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
+7. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
 ---
 
 ## 4. Auto Scaling 과 관측
+
+Launch Configuration 도 같은 Init Script 를 고른다. 3단계에서 값을 채워 등록해 둔 그 스크립트다.
+증설된 서버는 그 스크립트대로 이미지를 받아 뜨므로, **배포할 때 바꿔야 하는 것은 스크립트 안의
+`APP_IMAGE` 태그**다.
+
+#### 배포할 때는 스크립트를 고치지 말고 새로 만든다
+
+Init Script 는 콘솔에서 수정할 수 있다(목록에 수정 버튼이 있다). 하지만 **기존 Launch Configuration 이
+그 수정을 따라가는지는 확인되지 않았다.** LC 가 스크립트를 참조로 들고 있는지, 생성 시점에 복사해
+두는지가 화면에 드러나지 않는다.
+
+확인될 때까지는 어느 쪽이든 맞는 절차로 둔다.
+
+```
+새 이미지 push → Init Script 를 새로 만든다(수정하지 않는다)
+              → Launch Configuration 을 새로 만든다
+              → Auto Scaling Group 이 새 LC 를 쓰게 바꾼다
+```
+
+4단계에서 LC 를 만들고 스크립트를 고친 뒤 실제로 증설시켜 어느 쪽으로 뜨는지 보면 답이 나온다.
+참조라면 위 절차를 "스크립트 수정 → 재기동"으로 줄일 수 있다.
 
 - Launch Configuration 에 위 서버 이미지를 지정하고 평시 최소 대수를 둔다
 - Cloud Insight 로 CPU·요청 수·응답 시간·오류율·서버 수를 본다
@@ -278,6 +389,11 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 두 버킷 모두 전체 공개가 **"공개 안함"** 인가 (버킷 공개 = 목록 공개다)
 - [ ] 사진을 한 장 올려, 흐림본은 익명으로 열리고 원본은 403 인지 확인했는가
 - [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
+- [ ] `kkagung-acg-app` 의 **아웃바운드**가 열려 있는가 (비면 `docker pull` 이 타임아웃난다)
+- [ ] 레지스트리 저장 버킷이 `kkagung-registry` 인가 (사진 버킷이 아니어야 한다)
+- [ ] 서버 이미지를 만들 때 쓴 임시 서버·공인 IP·서브넷·ACG 를 반납했는가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
+- [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
+- [ ] 값이 채워진 Init Script 를 저장소에 커밋하지 않았는가 (저장소 파일은 빈 템플릿이어야 한다)
 - [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)
