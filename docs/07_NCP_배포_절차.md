@@ -31,7 +31,33 @@
 ### 시크릿을 두는 곳
 
 `.env` 파일을 서버 이미지에 굽지 않는다. 이미지가 유출되면 키가 함께 나간다.
-NCP 콘솔의 서버 환경변수 또는 Init Script 가 기동 시점에 주입하고, 값 자체는 저장소·이미지·로그 어디에도 남기지 않는다.
+
+**NCP VPC 서버 생성 화면에는 환경변수를 넣는 칸이 없다.** 고를 수 있는 것은 미리 콘솔에
+저장해 둔 Init Script 하나뿐이다. 값을 스크립트 바깥에서 넘길 수단이 없다.
+
+검토한 대안과 그 한계:
+
+| 대안 | 왜 쓰지 않나 |
+|---|---|
+| Secret Manager | `Get Secret Value` 호출에 `x-ncp-iam-access-key` 와 서명 헤더가 필요하다. 비밀을 가져오려고 비밀이 먼저 있어야 한다 |
+| Server Role | 서버에 역할을 붙여 키 없이 호출하는 방식이 KMS 문서에는 있으나, Secret Manager 에도 적용되는지 문서로 확인되지 않았다. 확인 안 된 경로에 배포를 걸지 않는다 |
+
+그래서 **Init Script 본문에 값을 직접 적는다.** 저장소의 `infra/ncp/init-script.sh` 는
+값이 빈 템플릿으로 두고, 값을 채운 사본은 콘솔에만 둔다.
+
+```sh
+# 저장소 (커밋하는 것)          # 콘솔 (커밋하지 않는 것)
+DATABASE_URL=""                DATABASE_URL="mysql://kkagung_app:<비밀번호>@<주소>:3306/kkagung"
+JWT_SECRET=""                  JWT_SECRET="<32바이트 이상 무작위>"
+```
+
+템플릿은 값이 비면 기동 전에 멈춘다. 채우지 않은 채로 올려도 조용히 잘못 뜨지 않는다.
+
+**감수하는 것:** 콘솔 접근 권한이 있는 사람에게 값이 평문으로 보인다. 교육용 데모 범위에서
+받아들인다. 실서비스로 전환한다면 Server Role 적용 여부를 먼저 확인하고 Secret Manager 로 옮긴다.
+
+**그래도 지키는 것:** 값이 채워진 사본을 저장소에 커밋하지 않는다. 이미지에도 굽지 않는다.
+`.env.example` 에는 키 이름만 둔다.
 
 ### 마이그레이션은 배포 단계에서 한 번만
 
@@ -241,8 +267,9 @@ docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
 1. Container Registry 에 레지스트리를 만들고 위 명령으로 이미지를 올린다
 2. 서버 이미지에 Docker 를 설치해 둔다. 애플리케이션 이미지는 넣지 않는다
 3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다
-4. Init Script 로 `infra/ncp/init-script.sh` 를 지정한다
-   - 비밀값은 스크립트에 적지 않는다. 콘솔의 서버 환경변수로 넘기고 스크립트는 읽기만 한다
+4. Init Script 를 먼저 콘솔에 등록하고(서버 생성 화면에서 고르려면 미리 있어야 한다),
+   서버 설정 단계에서 그 스크립트를 고른다 — `infra/ncp/init-script.sh`
+   - 등록할 때 상단 블록의 큰따옴표 안을 채운다. 채운 사본은 콘솔에만 둔다
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
    - 레지스트리 비밀번호는 표준입력으로 넘긴다. 인자로 주면 `ps` 출력에 그대로 보인다
    - 받아오기를 먼저 하고 기존 컨테이너를 지운다. 반대로 하면 `pull` 이 실패했을 때
@@ -256,6 +283,11 @@ docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
 ---
 
 ## 4. Auto Scaling 과 관측
+
+Launch Configuration 도 같은 Init Script 를 고른다. 3단계에서 값을 채워 등록해 둔 그 스크립트다.
+증설된 서버는 그 스크립트대로 이미지를 받아 뜨므로, **배포할 때 바꿔야 하는 것은 스크립트 안의
+`APP_IMAGE` 태그**다. 스크립트를 고친 뒤 Auto Scaling 이 새 내용을 쓰는지,
+아니면 Launch Configuration 을 다시 만들어야 하는지는 콘솔에서 확인한다.
 
 - Launch Configuration 에 위 서버 이미지를 지정하고 평시 최소 대수를 둔다
 - Cloud Insight 로 CPU·요청 수·응답 시간·오류율·서버 수를 본다
@@ -311,4 +343,5 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
 - [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
+- [ ] 값이 채워진 Init Script 를 저장소에 커밋하지 않았는가 (저장소 파일은 빈 템플릿이어야 한다)
 - [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)

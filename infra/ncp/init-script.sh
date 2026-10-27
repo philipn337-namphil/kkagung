@@ -3,39 +3,58 @@
 # NCP App Server Init Script
 #
 # 서버 이미지에 Docker 가 설치돼 있다는 전제로, 기동 시점에 Container Registry 에서
-# 애플리케이션 이미지를 받아 환경변수를 주입하고 컨테이너를 띄운다. Auto Scaling 으로
-# 새로 뜨는 서버도 같은 스크립트를 쓰므로, 증설된 서버가 최신 이미지를 받는다.
+# 애플리케이션 이미지를 받아 컨테이너를 띄운다. Auto Scaling 으로 새로 뜨는 서버도
+# 같은 스크립트를 쓰므로, 증설된 서버가 최신 이미지를 받는다.
 #
 # 레지스트리는 공인 주소다. VPC 에서는 Private Endpoint 를 쓸 수 없으므로(Classic 전용),
 # 앱 서브넷에 NAT Gateway 경로가 있어야 이 스크립트가 동작한다.
 #
-# 비밀값은 이 파일에 적지 않는다. 아래 "주입받는 값"을 콘솔의 서버 환경변수나
-# 별도 비밀 관리 수단으로 넘기고, 이 스크립트는 그 값을 읽기만 한다.
-# 이미지·저장소·로그 어디에도 값이 남지 않게 한다.
+# ── 값을 어디에 넣나 ────────────────────────────────────────
+# NCP VPC 서버 생성 화면에는 환경변수를 넣는 칸이 없다. 고를 수 있는 것은 미리
+# 콘솔에 저장해 둔 Init Script 하나뿐이다. 값을 스크립트 바깥에서 넘길 방법이
+# 없으므로, 아래 블록에 직접 적는 것이 유일한 통로다.
+#
+# 저장소의 이 파일은 값이 빈 템플릿으로 둔다. 값을 채운 사본은 콘솔에만 두고
+# 커밋하지 않는다. 콘솔 접근 권한이 있는 사람에게 평문으로 보이는 것은 감수한다.
+# 검토한 대안과 그 한계는 docs/07_NCP_배포_절차.md 의 "시크릿을 두는 곳" 에 있다.
 #
 set -euo pipefail
 
-APP_IMAGE="${APP_IMAGE:?APP_IMAGE 를 지정할 것}"
 CONTAINER_NAME="kkagung-api"
 
-# ── 주입받는 값 ───────────────────────────────────────────────
-#   DATABASE_URL                 Cloud DB 접속 문자열 (비밀번호 포함)
-#   JWT_SECRET                   32바이트 이상 무작위
-#   OBJECT_STORAGE_ACCESS_KEY    NCP 인증키
-#   OBJECT_STORAGE_SECRET_KEY    NCP 인증키
-#   FRONTEND_URL                 서비스 도메인 (HTTPS)
-#   NCP_ACCESS_KEY               Container Registry 로그인. Object Storage 와 같은 NCP API 인증키
-#   NCP_SECRET_KEY               위 인증키의 시크릿
-#   OBJECT_STORAGE_ENDPOINT      NCP Object Storage 엔드포인트
-#   OBJECT_STORAGE_PUBLIC_ENDPOINT  브라우저가 공개 이미지를 받는 주소
-: "${DATABASE_URL:?DATABASE_URL 을 지정할 것}"
-: "${JWT_SECRET:?JWT_SECRET 을 지정할 것}"
-: "${OBJECT_STORAGE_ACCESS_KEY:?OBJECT_STORAGE_ACCESS_KEY 를 지정할 것}"
-: "${OBJECT_STORAGE_SECRET_KEY:?OBJECT_STORAGE_SECRET_KEY 를 지정할 것}"
-: "${FRONTEND_URL:?FRONTEND_URL 을 지정할 것}"
-: "${OBJECT_STORAGE_ENDPOINT:?OBJECT_STORAGE_ENDPOINT 를 지정할 것}"
-: "${NCP_ACCESS_KEY:?NCP_ACCESS_KEY 를 지정할 것}"
-: "${NCP_SECRET_KEY:?NCP_SECRET_KEY 를 지정할 것}"
+# ── 콘솔에 등록할 때 큰따옴표 안을 채운다 ───────────────────
+APP_IMAGE=""                   # <레지스트리>.kr.ncr.ntruss.com/kkagung-api:<커밋 해시>
+DATABASE_URL=""                # mysql://kkagung_app:<비밀번호>@<Cloud DB 주소>:3306/kkagung
+JWT_SECRET=""                  # 32바이트 이상 무작위
+FRONTEND_URL=""                # 서비스 도메인 (HTTPS)
+OBJECT_STORAGE_ENDPOINT=""     # https://kr.object.ncloudstorage.com
+OBJECT_STORAGE_ACCESS_KEY=""   # NCP API 인증키
+OBJECT_STORAGE_SECRET_KEY=""   # 위 인증키의 시크릿
+NCP_ACCESS_KEY=""              # Container Registry 로그인. 위와 같은 인증키를 쓴다
+NCP_SECRET_KEY=""              # 위 인증키의 시크릿
+ADMIN_ALLOWED_IP_CIDRS=""      # 관리자 접속 대역. 비우면 관리자 API 가 전부 403 이다
+
+# ── 선택값. 비워 두면 괄호 안 값을 쓴다 ─────────────────────
+OBJECT_STORAGE_PUBLIC_ENDPOINT=""  # (위 엔드포인트와 같은 값) 브라우저가 공개 이미지를 받는 주소
+OBJECT_STORAGE_BUCKET_PUBLIC=""    # (kkagung-images-public)
+OBJECT_STORAGE_BUCKET_PRIVATE=""   # (kkagung-images-private)
+OBJECT_STORAGE_REGION=""           # (kr-standard)
+OBJECT_STORAGE_FORCE_PATH_STYLE="" # (true)
+JWT_EXPIRES_IN=""                  # (900s) 운영 기본값이라 비워 두면 된다(D-03)
+TRUST_PROXY=""                     # (1) 비우면 모든 사용자가 LB 주소 하나로 집계되어 함께 429 를 맞는다
+
+# 채우지 않은 값이 있으면 여기서 멈춘다. 잘못된 설정으로 조용히 뜨는 것보다 낫다.
+: "${APP_IMAGE:?APP_IMAGE 를 채울 것}"
+: "${DATABASE_URL:?DATABASE_URL 을 채울 것}"
+: "${JWT_SECRET:?JWT_SECRET 을 채울 것}"
+: "${FRONTEND_URL:?FRONTEND_URL 을 채울 것}"
+: "${OBJECT_STORAGE_ENDPOINT:?OBJECT_STORAGE_ENDPOINT 를 채울 것}"
+: "${OBJECT_STORAGE_ACCESS_KEY:?OBJECT_STORAGE_ACCESS_KEY 를 채울 것}"
+: "${OBJECT_STORAGE_SECRET_KEY:?OBJECT_STORAGE_SECRET_KEY 를 채울 것}"
+: "${NCP_ACCESS_KEY:?NCP_ACCESS_KEY 를 채울 것}"
+: "${NCP_SECRET_KEY:?NCP_SECRET_KEY 를 채울 것}"
+# 비우면 lib/admin.ts 가 관리자 요청을 전부 403 으로 막는다. /health 는 정상이라 늦게 발견된다.
+: "${ADMIN_ALLOWED_IP_CIDRS:?ADMIN_ALLOWED_IP_CIDRS 를 채울 것}"
 
 # 레지스트리 주소는 이미지 이름에서 꺼낸다. 따로 받으면 둘이 어긋난 채로 기동할 수 있다.
 REGISTRY_HOST="${APP_IMAGE%%/*}"
@@ -68,22 +87,19 @@ docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped -p 8080:8080 \
   -e DATABASE_URL="${DATABASE_URL}" \
   -e JWT_SECRET="${JWT_SECRET}" \
   -e FRONTEND_URL="${FRONTEND_URL}" \
-  `# 운영 TTL 은 900s 가 기본이라 생략해도 되지만 의도를 드러내 둔다(D-03)` \
   -e JWT_EXPIRES_IN="${JWT_EXPIRES_IN:-900s}" \
-  `# 비우면 모든 사용자가 LB 주소 하나로 집계되어 함께 429 를 맞는다` \
   -e TRUST_PROXY="${TRUST_PROXY:-1}" \
   `# 마이그레이션은 배포 단계에서 한 번만 돌린다. 여러 대가 동시에 뜨므로 여기서는 끈다` \
   -e RUN_MIGRATIONS_ON_START=false \
   -e OBJECT_STORAGE_ENDPOINT="${OBJECT_STORAGE_ENDPOINT}" \
-  -e OBJECT_STORAGE_PUBLIC_ENDPOINT="${OBJECT_STORAGE_PUBLIC_ENDPOINT:-}" \
+  -e OBJECT_STORAGE_PUBLIC_ENDPOINT="${OBJECT_STORAGE_PUBLIC_ENDPOINT:-${OBJECT_STORAGE_ENDPOINT}}" \
   -e OBJECT_STORAGE_BUCKET_PUBLIC="${OBJECT_STORAGE_BUCKET_PUBLIC:-kkagung-images-public}" \
   -e OBJECT_STORAGE_BUCKET_PRIVATE="${OBJECT_STORAGE_BUCKET_PRIVATE:-kkagung-images-private}" \
   -e OBJECT_STORAGE_ACCESS_KEY="${OBJECT_STORAGE_ACCESS_KEY}" \
   -e OBJECT_STORAGE_SECRET_KEY="${OBJECT_STORAGE_SECRET_KEY}" \
   -e OBJECT_STORAGE_REGION="${OBJECT_STORAGE_REGION:-kr-standard}" \
   -e OBJECT_STORAGE_FORCE_PATH_STYLE="${OBJECT_STORAGE_FORCE_PATH_STYLE:-true}" \
-  `# 관리자 API 접근 대역. 운영에서 비우면 lib/admin.ts 가 관리자 요청을 전부 403 으로 막는다.` \
-  -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS:?set ADMIN_ALLOWED_IP_CIDRS - empty blocks every admin request in production}" \
+  -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS}" \
   "${APP_IMAGE}"
 
 # LB 헬스체크가 붙기 전에 애플리케이션이 뜰 때까지 기다린다.
