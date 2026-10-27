@@ -236,3 +236,37 @@ describe("DELETE /api/v1/me/images/:imageId", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("같은 자리 동시 업로드 (IMG-01)", () => {
+  it("한쪽은 409 로 밀리고 저장소에 주인 없는 객체를 남기지 않는다", async () => {
+    const storage = await import("../src/lib/objectStorage.js");
+    const prefixes = [
+      [storage.privateBucket(), `originals/${ids[OWNER]}/`],
+      [storage.publicBucket(), `profiles/blur/${ids[OWNER]}/`],
+    ] as const;
+    // 앞선 테스트가 남긴 객체와 섞이지 않게, 이번 요청이 새로 만든 것만 본다.
+    const before = new Set(
+      (await Promise.all(prefixes.map(([bucket, prefix]) => storage.listObjects(bucket, prefix)))).flat(),
+    );
+
+    // 두 요청이 같은 빈 자리를 함께 보고 들어간다. 유니크 제약이 하나를 떨어뜨리는데,
+    // 그때 이미 올린 원본·흐림본을 정리하지 않으면 DB 가 참조하지 않는 객체가 남는다.
+    const image = await photo();
+    const results = await Promise.all([upload(OWNER, image), upload(OWNER, image)]);
+
+    expect(results.map((r) => r.status).sort()).toEqual([202, 409]);
+    expect(results.find((r) => r.status === 409)!.body.error.code).toBe("IMAGE_LIMIT_EXCEEDED");
+
+    const rows = await db.profileImage.findMany({ where: { userId: ids[OWNER] } });
+    expect(rows.filter((row) => row.imageType === "ORIGINAL_PRIVATE")).toHaveLength(1);
+
+    const referenced = new Set(rows.map((row) => row.objectKey).filter((key) => key !== ""));
+    const after = (await Promise.all(prefixes.map(([bucket, prefix]) => storage.listObjects(bucket, prefix)))).flat();
+    const created = after.filter((key) => !before.has(key));
+    // 살아남은 요청의 원본·흐림본 두 개만 남아야 한다.
+    for (const key of created) {
+      expect(referenced.has(key), `주인 없는 객체가 남았다: ${key}`).toBe(true);
+    }
+    expect(created).toHaveLength(2);
+  });
+});

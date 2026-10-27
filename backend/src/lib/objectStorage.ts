@@ -1,6 +1,6 @@
 import "dotenv/config";
 import {
-  CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client,
+  CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -63,6 +63,21 @@ const client = () => {
 
 export const putObject = async (bucket: string, key: string, body: Buffer, contentType: string) => {
   await client().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+};
+
+/**
+ * 접두사로 객체 키를 모아 돌려준다. DB 가 참조하지 않는 객체가 남지 않았는지 확인할 때 쓴다.
+ * 목록은 한 번에 다 오지 않을 수 있어 continuation token 을 따라간다.
+ */
+export const listObjects = async (bucket: string, prefix: string) => {
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const page = await client().send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+    for (const item of page.Contents ?? []) if (item.Key) keys.push(item.Key);
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return keys;
 };
 
 export const deleteObject = async (bucket: string, key: string) => {

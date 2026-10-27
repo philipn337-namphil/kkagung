@@ -52,8 +52,8 @@ docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped -p 8080:8080 \
   -e OBJECT_STORAGE_SECRET_KEY="${OBJECT_STORAGE_SECRET_KEY}" \
   -e OBJECT_STORAGE_REGION="${OBJECT_STORAGE_REGION:-kr-standard}" \
   -e OBJECT_STORAGE_FORCE_PATH_STYLE="${OBJECT_STORAGE_FORCE_PATH_STYLE:-true}" \
-  `# 관리자 API 접근 대역. 비우면 IP 제한을 적용하지 않는다` \
-  -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS:-}" \
+  `# 관리자 API 접근 대역. 운영에서 비우면 lib/admin.ts 가 관리자 요청을 전부 403 으로 막는다.` \
+  -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS:?set ADMIN_ALLOWED_IP_CIDRS - empty blocks every admin request in production}" \
   "${APP_IMAGE}"
 
 # LB 헬스체크가 붙기 전에 애플리케이션이 뜰 때까지 기다린다.
