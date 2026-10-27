@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -96,33 +97,58 @@ imagesRouter.post("/", upload.single("file"), async (req, res, next) => {
 
     const originalKey = objectKeyFor("original", userId, "jpg");
     const blurredKey = objectKeyFor("blurred", userId, "webp");
-    await putObject(privateBucket(), originalKey, prepared.original.body, prepared.original.contentType);
-    await putObject(publicBucket(), blurredKey, prepared.blurred.body, prepared.blurred.contentType);
+
+    // DB 에 남지 않을 객체는 지운다. 지우지 못해도 요청 처리를 막지는 않는다.
+    const discardUploaded = () => Promise.allSettled([
+      deleteObject(privateBucket(), originalKey),
+      deleteObject(publicBucket(), blurredKey),
+    ]);
+
+    try {
+      await putObject(privateBucket(), originalKey, prepared.original.body, prepared.original.contentType);
+      await putObject(publicBucket(), blurredKey, prepared.blurred.body, prepared.blurred.contentType);
+    } catch (error) {
+      // 한쪽만 올라간 채로 두면 아무도 참조하지 않는 객체가 남는다.
+      await discardUploaded();
+      throw error;
+    }
 
     // 세 행을 한 트랜잭션으로 남긴다. AI 는 공급자가 정해지기 전까지 PENDING 으로 둔다(D-02).
-    const created = await prisma.$transaction(async (tx) => {
-      const original = await tx.profileImage.create({
-        data: {
-          userId, slot, imageType: "ORIGINAL_PRIVATE", objectKey: originalKey, generationStatus: "DONE",
-          byteSize: prepared.original.byteSize, width: prepared.original.width, height: prepared.original.height,
-          processedAt: new Date(),
-        },
+    // 같은 자리에 동시 요청이 오면 유니크 제약이 하나를 떨어뜨린다. 그때 이미 올린 객체를
+    // 정리하지 않으면 아무도 참조하지 않는 원본·흐림본이 버킷에 남는다(IMG-01).
+    let created;
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        const original = await tx.profileImage.create({
+          data: {
+            userId, slot, imageType: "ORIGINAL_PRIVATE", objectKey: originalKey, generationStatus: "DONE",
+            byteSize: prepared.original.byteSize, width: prepared.original.width, height: prepared.original.height,
+            processedAt: new Date(),
+          },
+        });
+        await tx.profileImage.create({
+          data: {
+            userId, slot, imageType: "BLURRED_PUBLIC", objectKey: blurredKey, generationStatus: "DONE",
+            byteSize: prepared.blurred.byteSize, width: prepared.blurred.width, height: prepared.blurred.height,
+            processedAt: new Date(),
+          },
+        });
+        await tx.profileImage.create({
+          data: {
+            userId, slot, imageType: "AI_PUBLIC", objectKey: "", generationStatus: "PENDING",
+            byteSize: 0, width: 0, height: 0,
+          },
+        });
+        return original;
       });
-      await tx.profileImage.create({
-        data: {
-          userId, slot, imageType: "BLURRED_PUBLIC", objectKey: blurredKey, generationStatus: "DONE",
-          byteSize: prepared.blurred.byteSize, width: prepared.blurred.width, height: prepared.blurred.height,
-          processedAt: new Date(),
-        },
-      });
-      await tx.profileImage.create({
-        data: {
-          userId, slot, imageType: "AI_PUBLIC", objectKey: "", generationStatus: "PENDING",
-          byteSize: 0, width: 0, height: 0,
-        },
-      });
-      return original;
-    });
+    } catch (error) {
+      await discardUploaded();
+      // 경쟁에서 밀린 요청은 서버 오류가 아니라 자리 충돌이다.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        return fail(res, 409, "IMAGE_LIMIT_EXCEEDED", "이미 사용 중인 자리입니다. 기존 사진을 지우고 올려주세요.");
+      }
+      throw error;
+    }
 
     noStore(res);
     return ok(res, { imageId: created.id.toString(), slot, generationStatus: "PENDING" }, 202);
