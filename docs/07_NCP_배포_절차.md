@@ -110,11 +110,16 @@ NATGW   kkagung-natgw                공인 IP 211.233.206.191 / 사설 10.0.2.6
 
 ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서버가 늘어도 규칙을 고치지 않기 위해서다.
 
-| ACG | 인바운드 허용 |
-|---|---|
-| `kkagung-acg-lb` | 인터넷 → 443 |
-| `kkagung-acg-app` | `kkagung-acg-lb` → 8080 |
-| `kkagung-acg-db` | `kkagung-acg-app` → 3306 |
+| ACG | 인바운드 허용 | 아웃바운드 허용 |
+|---|---|---|
+| `kkagung-acg-lb` | 인터넷 → 443 | `kkagung-acg-app` → 8080 |
+| `kkagung-acg-app` | `kkagung-acg-lb` → 8080 | **열어야 한다.** 아래 참고 |
+| `cloud-mysql-*` | `kkagung-acg-app` → 3306 | Cloud DB 가 자동으로 만든다 |
+
+**아웃바운드는 기본이 비어 있고, NCP ACG 는 규칙에 없으면 막는다.**
+`kkagung-acg-app` 의 아웃바운드를 열지 않으면 Container Registry 와 Object Storage 로 나가지 못한다.
+둘 다 공인 주소라 NAT Gateway 와 라우트가 전부 맞아도 소용이 없다.
+증상은 `docker pull` 타임아웃 하나뿐이라, 없는 NAT 문제를 먼저 의심하게 된다.
 
 NACL 은 서브넷 단위로 위 경로 외의 인·아웃바운드를 차단한다.
 
@@ -195,6 +200,7 @@ Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 
 |---|---|
 | `kkagung-images-public` | 익명 읽기 허용. AI·흐림 이미지만 들어간다 |
 | `kkagung-images-private` | 비공개. 원본만 들어간다. 서버가 발급한 서명 URL 로만 읽는다 |
+| `kkagung-registry` | 비공개. Container Registry 전용. 사진과 섞지 않는다(3단계 참고) |
 
 애플리케이션에는 **버킷 생성 권한을 주지 않는다.** 로컬에서만 없으면 만들고, 운영에서는 인프라가 정책까지 포함해 미리 만든다.
 
@@ -262,12 +268,39 @@ docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
 태그는 커밋 해시로 둔다. `latest` 로 두면 증설된 서버가 어떤 코드로 떴는지 알 수 없고,
 되돌릴 지점도 사라진다.
 
+### 확정된 값
+
+```
+레지스트리            kkagung
+Public Endpoint      kkagung.kr.ncr.ntruss.com      ← VPC 에서는 이쪽을 쓴다
+Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에서 쓸 수 없다
+저장 버킷             kkagung-registry
+```
+
 ### 순서
 
-1. Container Registry 에 레지스트리를 만들고 위 명령으로 이미지를 올린다
-2. 서버 이미지에 Docker 를 설치해 둔다. 애플리케이션 이미지는 넣지 않는다
-3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다
-4. Init Script 를 먼저 콘솔에 등록하고(서버 생성 화면에서 고르려면 미리 있어야 한다),
+1. **레지스트리 전용 버킷을 먼저 만든다** — `kkagung-registry`
+   레지스트리 생성 폼에서 저장 버킷을 고르는데, 목록에 사진 버킷만 떠서 모르고 고르기 쉽다.
+   원본 사진 버킷은 "수락 전 신원 노출을 막는" 경계다(D-01). 성격이 다른 도커 레이어를 섞으면
+   그 경계가 흐려지고, 버킷 단위 권한·수명주기·용량이 서로 얽힌다.
+   업로드 회귀 테스트도 그 버킷에 `ListObjectsV2` 를 쓰므로, 설정이 운영 버킷을 가리키면
+   레지스트리 객체까지 집계한다.
+2. Container Registry 에 레지스트리를 만들고 저장 버킷으로 위 버킷을 고른 뒤, 아래 명령으로 이미지를 올린다
+3. **서버 이미지를 만든다.** `kkagung-sn-app` 은 비공인이라 SSH 로 들어갈 수 없다.
+   공인 일반 서브넷에 임시 서버를 띄워 만들고, 끝나면 반납한다.
+   서버 이미지는 서브넷과 무관하게 재사용되므로, 진짜 앱 서버는 `kkagung-sn-app` 에 그대로 띄운다.
+
+   ```
+   a. 서브넷 kkagung-sn-build (10.0.3.0/24, KR-1, 공인, 일반) + ACG kkagung-acg-build 생성
+      ACG 인바운드는 TCP 22 를 작업자 IP 한 대로만 연다
+   b. 임시 서버를 띄워 SSH 로 접속, Docker 설치
+      애플리케이션 이미지는 넣지 않는다. 기동할 때 레지스트리에서 받는다
+   c. 서버 이미지 생성
+   d. 임시 서버·공인 IP·서브넷·ACG 반납
+   ```
+4. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다
+   - **이 ACG 의 아웃바운드가 열려 있어야 한다**(1단계 참고). 비어 있으면 `docker pull` 에서 멈춘다
+5. Init Script 를 먼저 콘솔에 등록하고(서버 생성 화면에서 고르려면 미리 있어야 한다),
    서버 설정 단계에서 그 스크립트를 고른다 — `infra/ncp/init-script.sh`
    - 등록할 때 상단 블록의 큰따옴표 안을 채운다. 채운 사본은 콘솔에만 둔다
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
@@ -277,8 +310,8 @@ docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
    - 끝나면 `docker logout` 한다. 자격증명이 인스턴스의 `~/.docker/config.json` 에 남는다
    - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
    - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
-5. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
-6. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
+6. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
+7. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
 ---
 
@@ -286,8 +319,24 @@ docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
 
 Launch Configuration 도 같은 Init Script 를 고른다. 3단계에서 값을 채워 등록해 둔 그 스크립트다.
 증설된 서버는 그 스크립트대로 이미지를 받아 뜨므로, **배포할 때 바꿔야 하는 것은 스크립트 안의
-`APP_IMAGE` 태그**다. 스크립트를 고친 뒤 Auto Scaling 이 새 내용을 쓰는지,
-아니면 Launch Configuration 을 다시 만들어야 하는지는 콘솔에서 확인한다.
+`APP_IMAGE` 태그**다.
+
+#### 배포할 때는 스크립트를 고치지 말고 새로 만든다
+
+Init Script 는 콘솔에서 수정할 수 있다(목록에 수정 버튼이 있다). 하지만 **기존 Launch Configuration 이
+그 수정을 따라가는지는 확인되지 않았다.** LC 가 스크립트를 참조로 들고 있는지, 생성 시점에 복사해
+두는지가 화면에 드러나지 않는다.
+
+확인될 때까지는 어느 쪽이든 맞는 절차로 둔다.
+
+```
+새 이미지 push → Init Script 를 새로 만든다(수정하지 않는다)
+              → Launch Configuration 을 새로 만든다
+              → Auto Scaling Group 이 새 LC 를 쓰게 바꾼다
+```
+
+4단계에서 LC 를 만들고 스크립트를 고친 뒤 실제로 증설시켜 어느 쪽으로 뜨는지 보면 답이 나온다.
+참조라면 위 절차를 "스크립트 수정 → 재기동"으로 줄일 수 있다.
 
 - Launch Configuration 에 위 서버 이미지를 지정하고 평시 최소 대수를 둔다
 - Cloud Insight 로 CPU·요청 수·응답 시간·오류율·서버 수를 본다
@@ -340,6 +389,9 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 두 버킷 모두 전체 공개가 **"공개 안함"** 인가 (버킷 공개 = 목록 공개다)
 - [ ] 사진을 한 장 올려, 흐림본은 익명으로 열리고 원본은 403 인지 확인했는가
 - [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
+- [ ] `kkagung-acg-app` 의 **아웃바운드**가 열려 있는가 (비면 `docker pull` 이 타임아웃난다)
+- [ ] 레지스트리 저장 버킷이 `kkagung-registry` 인가 (사진 버킷이 아니어야 한다)
+- [ ] 서버 이미지를 만들 때 쓴 임시 서버·공인 IP·서브넷·ACG 를 반납했는가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
 - [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
