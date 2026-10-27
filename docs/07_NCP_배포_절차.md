@@ -60,17 +60,22 @@ RUN_MIGRATIONS_ON_START=false
 | Subnet | `kkagung-sn-lb` | `10.0.1.0/24` | 로드밸런서 전용, 공인 |
 | Subnet | `kkagung-sn-app` | `10.0.10.0/24` | 비공인 |
 | Subnet | `kkagung-sn-db` | `10.0.20.0/24` | 비공인 |
+| Subnet | `kkagung-sn-nat` | `10.0.2.0/24` | NAT Gateway 전용, 공인 |
+| NAT Gateway | `kkagung-natgw` | | 공인 IP 할당 |
 
 실제로 만든 자원은 아래와 같다. 이후 단계에서 이 이름으로 지정한다.
 
 ```
-VPC     kkagung-vpc      151444
-Subnet  kkagung-sn-lb    332078
-        kkagung-sn-app   332079
-        kkagung-sn-db    332080
-ACG     kkagung-acg-lb   411093
-        kkagung-acg-app  411094
-        kkagung-acg-db   411095
+VPC     kkagung-vpc         151444
+Subnet  kkagung-sn-lb       332078   10.0.1.0/24    공인   LoadBalancer
+        kkagung-sn-app      332079   10.0.10.0/24   사설   일반
+        kkagung-sn-db       332080   10.0.20.0/24   사설   일반
+        kkagung-sn-nat      332184   10.0.2.0/24    공인   NatGateway
+ACG     kkagung-acg-lb      411093
+        kkagung-acg-app     411094
+        kkagung-acg-db      411095   (미사용)
+        cloud-mysql-2f8r8p  411098   Cloud DB 가 자동 생성
+NATGW   kkagung-natgw                공인 IP 211.233.206.191 / 사설 10.0.2.6
 ```
 
 `kkagung-acg-db` 는 Cloud DB 가 전용 ACG 를 따로 만들기 때문에 쓰이지 않는다. 2단계를 참고한다.
@@ -84,6 +89,36 @@ ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서
 | `kkagung-acg-db` | `kkagung-acg-app` → 3306 |
 
 NACL 은 서브넷 단위로 위 경로 외의 인·아웃바운드를 차단한다.
+
+### 앱 서브넷의 아웃바운드 — NAT Gateway
+
+앱 서버는 비공인 서브넷에 있어 Object Storage(공인 주소)에 닿지 못한다. 그대로 두면 사진 업로드가 전부 실패한다.
+Private Link 는 쓸 수 없다. `Naver Cloud Platform Service` 목록에 Object Storage 가 없다. 그래서 NAT Gateway 로 나간다.
+
+NAT Gateway 는 **용도가 `NATGW` 인 전용 서브넷**을 요구한다. 일반 공인 서브넷이나 LB 전용 서브넷은 선택지에 뜨지 않는다.
+
+1. 서브넷 `kkagung-sn-nat` — `10.0.2.0/24`, KR-1, 공인, 용도 **NATGW**
+2. NAT Gateway `kkagung-natgw` — 공인 IP 함께 신청
+3. 앱 서브넷의 Route Table 에 `0.0.0.0/0 → NATGW kkagung-natgw` 추가
+
+**3번을 빠뜨리면 자원은 다 있는데 트래픽이 흐르지 않는다.** 증상은 업로드 타임아웃뿐이라 원인을 찾기 어렵다.
+
+#### 기본 사설 Route Table 을 그대로 쓰면 DB 서브넷까지 열린다
+
+`kkagung-vpc-default-private-table` 에는 `kkagung-sn-app` 과 `kkagung-sn-db` 가 **함께** 묶여 있다.
+여기에 기본 경로를 넣으면 DB 서브넷도 인터넷으로 나갈 수 있게 된다. DB 는 나갈 일이 없고,
+나갈 수 있으면 침해 시 데이터를 밖으로 빼낼 길이 생긴다.
+
+앱 전용 Route Table 을 따로 만들어 분리한다.
+
+```
+Route Table 생성   kkagung-rt-app   사설
+  Routes          0.0.0.0/0 → NATGW kkagung-natgw
+  연관 Subnet      kkagung-sn-app
+
+kkagung-vpc-default-private-table 에서 0.0.0.0/0 경로 삭제
+  → kkagung-sn-db 는 LOCAL 만 남는다
+```
 
 ---
 
@@ -135,6 +170,24 @@ Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 
 
 애플리케이션에는 **버킷 생성 권한을 주지 않는다.** 로컬에서만 없으면 만들고, 운영에서는 인프라가 정책까지 포함해 미리 만든다.
 
+엔드포인트는 `https://kr.object.ncloudstorage.com`, 리전은 `kr-standard`, 주소는 경로 방식이다.
+`OBJECT_STORAGE_PUBLIC_ENDPOINT` 도 같은 값을 쓴다. 브라우저가 받는 공개 이미지 주소는
+`https://kr.object.ncloudstorage.com/kkagung-images-public/<object key>` 가 된다.
+
+#### 공개 버킷에 목록 조회 권한을 주지 않는다
+
+공개 버킷에 필요한 것은 **객체 읽기**지 **버킷 목록 조회**가 아니다. 목록이 열려 있으면
+인증 없이 전체 키를 받아갈 수 있고, 키에 사용자 ID 가 들어 있어 사용자 목록과 흐림 사진 전부가
+요청 한 번에 나간다.
+
+```bash
+# 목록이 열려 있으면 ListBucketResult 가 돌아온다. 막혀 있으면 AccessDenied 다.
+curl -s https://kr.object.ncloudstorage.com/kkagung-images-public/
+curl -s https://kr.object.ncloudstorage.com/kkagung-images-private/   # 항상 AccessDenied
+```
+
+권한 설정에서 **모든 사용자**에게는 객체 읽기만 남기고 버킷 조회는 해제한다.
+
 ---
 
 ## 3. 앱 서버와 로드밸런서
@@ -145,8 +198,10 @@ Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
    - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
    - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
-3. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
-4. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
+3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다.
+   이 서브넷의 Route Table 에 NAT Gateway 경로가 있어야 Object Storage 에 닿는다(1단계 참고)
+4. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
+5. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
 ---
 
@@ -200,6 +255,8 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 마이그레이션을 배포 단계에서 한 번 적용했는가
 - [ ] `JWT_SECRET` 이 이미지·저장소·로그에 남지 않는가
 - [ ] 원본 버킷이 비공개인가
+- [ ] 공개 버킷의 **목록 조회**가 막혀 있는가 (객체 읽기만 열어 둔다)
+- [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
 - [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)
