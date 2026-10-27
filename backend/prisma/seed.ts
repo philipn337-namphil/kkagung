@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
+import sharp from "sharp";
 import { PrismaClient } from "@prisma/client";
+import { privateBucket, publicBucket, putObject, storageReady } from "../src/lib/objectStorage.js";
 const prisma = new PrismaClient();
 
 type Gender = "MALE" | "FEMALE";
@@ -70,6 +72,28 @@ const imageRows = (seedNo: number) => [
   { imageType: "BLURRED_PUBLIC" as const, objectKey: `profiles/blurred/seed-${seedNo}-1.webp` },
 ];
 
+/**
+ * 시드 계정의 자리 표시 사진. 사람 사진이 아니라 색이 다른 단색 도형이라 구분만 된다.
+ * 행만 만들고 객체를 올리지 않으면 추천 카드가 전부 깨진 이미지로 뜬다.
+ */
+const placeholder = (seedNo: number, blur: boolean) => {
+  const hue = (seedNo * 47) % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
+    + `<rect width="1024" height="1024" fill="hsl(${hue} 55% 78%)"/>`
+    + `<circle cx="512" cy="420" r="190" fill="hsl(${hue} 45% 58%)"/>`
+    + `<rect x="232" y="690" width="560" height="320" rx="160" fill="hsl(${hue} 45% 58%)"/></svg>`;
+  const image = sharp(Buffer.from(svg));
+  return (blur ? image.blur(28) : image).webp({ quality: 80 }).toBuffer();
+};
+
+/** 저장소가 설정된 환경에서만 올린다. 설정이 없으면 행만 두고 넘어간다. */
+const seedImageObject = async (imageType: string, objectKey: string, seedNo: number) => {
+  if (!storageReady()) return;
+  const isOriginal = imageType === "ORIGINAL_PRIVATE";
+  const body = await placeholder(seedNo, imageType === "BLURRED_PUBLIC");
+  await putObject(isOriginal ? privateBucket() : publicBucket(), objectKey, body, "image/webp");
+};
+
 async function main() {
   const passwordHash = await bcrypt.hash(process.env.SEED_PASSWORD ?? "kkagung123!", 12);
   const now = new Date();
@@ -126,6 +150,7 @@ async function main() {
     });
 
     for (const row of imageRows(p.seedNo)) {
+      await seedImageObject(row.imageType, row.objectKey, p.seedNo);
       const imageData = {
         objectKey: row.objectKey,
         generationStatus: "DONE" as const,
@@ -144,6 +169,7 @@ async function main() {
   }
 
   console.log(`Seed complete: 계정 ${accounts.length}개`);
+  if (!storageReady()) console.log("  저장소 설정이 없어 사진 객체는 올리지 않았다. 카드는 자리 표시로 보인다.");
   for (const account of accounts) console.log(`  - ${account.email}`);
 }
 
