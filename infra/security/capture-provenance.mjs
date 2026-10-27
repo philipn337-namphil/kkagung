@@ -5,7 +5,8 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const files = ['backend/package.json', 'backend/package-lock.json'];
+const files = ['backend/package.json', 'backend/package-lock.json',
+  'frontend/app.js', 'frontend/server.js', 'frontend/index.html', 'frontend/styles.css', 'frontend/package.json'];
 for (const directory of ['backend/src', 'backend/prisma', 'backend/tests', 'infra/security']) {
   const walk = path => {
     for (const item of readdirSync(path, { withFileTypes: true })) {

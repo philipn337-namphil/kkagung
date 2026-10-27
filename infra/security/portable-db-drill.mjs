@@ -91,7 +91,7 @@ try {
   const selection = process.env.SECURITY_TARGETED_BACKEND === '1' ? ['tests/dev.test.ts', 'tests/trustProxy.test.ts', 'tests/images.test.ts'] : [];
   evidence.backendSelection = selection.length ? selection : 'all';
   const tests = node(['node_modules/vitest/vitest.mjs', 'run', ...selection, '--reporter=json', '--hookTimeout=60000',
-    `--testTimeout=${selection.length ? 60000 : 30000}`, '--maxWorkers=1'], 600000);
+    `--testTimeout=${selection.length || process.env.SECURITY_FRONTEND_AUDIT === '1' ? 60000 : 30000}`, '--maxWorkers=1'], 600000);
   writeFileSync(resolve(runDir, 'tests-private.json'), tests.stdout ?? '');
   writeFileSync(resolve(runDir, 'tests-private.stderr.log'), tests.stderr ?? '');
   evidence.steps['backend-tests'] = tests.status === 0 && !tests.error;
@@ -104,7 +104,7 @@ try {
     cases: parsed.testResults.flatMap(file => file.assertionResults.map(item => ({ name: item.fullName, status: item.status }))) };
   }
   const auditPath = resolve(root, 'infra/security/evidence/live-db-audit.json');
-  if (process.env.SECURITY_MATRIX_ONLY === '1') evidence.steps['live-db-audit'] = null;
+  if (process.env.SECURITY_MATRIX_ONLY === '1' || process.env.SECURITY_FRONTEND_AUDIT === '1') evidence.steps['live-db-audit'] = null;
   else {
     const audit = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-db-audit.mjs'), backend, auditPath]);
     evidence.steps['live-db-audit'] = audit.status === 0 && !audit.error;
@@ -121,6 +121,14 @@ try {
       evidence.steps['authorization-matrix'] = matrix.status === 0 && !matrix.error;
       console.log(`authorization-matrix: ${evidence.steps['authorization-matrix'] ? 'PASS' : 'FAIL'}`);
       writeFileSync(resolve(runDir, 'authorization-matrix-private.stderr.log'), matrix.stderr ?? '');
+    }
+    if (process.env.SECURITY_FRONTEND_AUDIT === '1') {
+      check(node(['--import', './node_modules/tsx/dist/loader.mjs', 'prisma/seed.ts']), 'frontend-synthetic-seed');
+      const frontend = node(['--import', './node_modules/tsx/dist/loader.mjs', resolve(root, 'infra/security/live-frontend-audit.mjs'), backend,
+        resolve(root, 'infra/security/evidence/live-frontend-audit.json')], 750000);
+      evidence.steps['frontend-audit'] = frontend.status === 0 && !frontend.error;
+      console.log(`frontend-audit: ${evidence.steps['frontend-audit'] ? 'PASS' : 'FAIL'}`);
+      writeFileSync(resolve(runDir, 'frontend-audit-private.stderr.log'), frontend.stderr ?? '');
     }
     const started = performance.now();
   const dump = check(exec(resolve(mysqlHome, 'bin/mysqldump.exe'), ['--no-defaults', '--protocol=TCP',
@@ -145,7 +153,7 @@ try {
     checksumMethod: 'SHA-256 of primary-key-ordered logical row dump; no timestamps/comments/DDL',
     sourceSha256: beforeHash, restoredSha256: afterHash,
     localDumpRestoreVerifyMs: Math.round(performance.now() - started) };
-  const auditsPassed = evidence.steps['live-db-audit'] !== false && evidence.steps['image-state-audit'] !== false &&
+  const auditsPassed = evidence.steps['live-db-audit'] !== false && evidence.steps['image-state-audit'] !== false && evidence.steps['frontend-audit'] !== false &&
     (process.env.SECURITY_MATRIX_ONLY === '1' ? evidence.steps['authorization-matrix'] === true : evidence.steps['authorization-matrix'] !== false);
   evidence.status = auditsPassed && evidence.steps['backend-tests'] === null ? 'focused-only'
     : auditsPassed && evidence.steps['backend-tests'] ? 'passed-local-db-only' : 'failed-tests';
@@ -161,7 +169,7 @@ finally {
   }
   // Retain only the disposable local data directory for diagnosis; never copy it into Git.
   evidence.runtimeDirectory = runDir;
-  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_MATRIX_ONLY === '1' ? 'portable-db-matrix' : process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : process.env.SECURITY_TARGETED_BACKEND === '1' ? 'portable-db-recheck' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
+  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_FRONTEND_ONLY === '1' ? 'portable-db-frontend-only' : process.env.SECURITY_FRONTEND_AUDIT === '1' ? 'portable-db-frontend' : process.env.SECURITY_MATRIX_ONLY === '1' ? 'portable-db-matrix' : process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : process.env.SECURITY_TARGETED_BACKEND === '1' ? 'portable-db-recheck' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
   console.log(JSON.stringify({ status: evidence.status, steps: evidence.steps, failedStage: evidence.failedStage,
     tests: evidence.tests && { passed: evidence.tests.passed, failed: evidence.tests.failed, pending: evidence.tests.pending },
     restore: evidence.restore, serverStopped: evidence.serverStopped }, null, 2));

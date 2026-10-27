@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [mysqlHome, python, motoPackages, mode] = process.argv.slice(2);
-if (mode && !['--focused', '--recheck', '--matrix'].includes(mode)) throw new Error('Unknown mode');
+if (mode && !['--focused', '--recheck', '--matrix', '--frontend', '--frontend-only'].includes(mode)) throw new Error('Unknown mode');
 if (!mysqlHome || !python || !motoPackages) throw new Error('Usage: run-storage-gates.mjs <mysqlHome> <python> <motoPackages>');
 const require = createRequire(resolve(root, 'backend/package.json'));
 const { S3Client, CreateBucketCommand, PutBucketPolicyCommand } = require('@aws-sdk/client-s3');
@@ -23,9 +23,10 @@ const env = { ...process.env, PYTHONPATH: resolve(motoPackages), AWS_EC2_METADAT
   OBJECT_STORAGE_ENDPOINT: endpoint, OBJECT_STORAGE_PUBLIC_ENDPOINT: '', OBJECT_STORAGE_REGION: 'us-east-1',
   OBJECT_STORAGE_ACCESS_KEY: randomBytes(16).toString('hex'), OBJECT_STORAGE_SECRET_KEY: randomBytes(32).toString('hex'),
   OBJECT_STORAGE_BUCKET_PUBLIC: 'kkagung-drill-public', OBJECT_STORAGE_BUCKET_PRIVATE: 'kkagung-drill-private',
-  OBJECT_STORAGE_FORCE_PATH_STYLE: 'true', S3_IGNORE_SUBDOMAIN_BUCKETNAME: 'true', TRUST_PROXY: '', SECURITY_IMAGE_STATE_AUDIT: mode === '--matrix' ? '0' : '1',
-  SECURITY_MATRIX_ONLY: mode === '--matrix' ? '1' : '0', SECURITY_AUTH_MATRIX: '1',
-  SECURITY_FOCUSED_AUDIT: ['--focused', '--matrix'].includes(mode) ? '1' : '0', SECURITY_TARGETED_BACKEND: mode === '--recheck' ? '1' : '0' };
+  OBJECT_STORAGE_FORCE_PATH_STYLE: 'true', S3_IGNORE_SUBDOMAIN_BUCKETNAME: 'true', TRUST_PROXY: '', SECURITY_IMAGE_STATE_AUDIT: ['--matrix', '--frontend', '--frontend-only'].includes(mode) ? '0' : '1',
+  SECURITY_FRONTEND_ONLY: mode === '--frontend-only' ? '1' : '0', SECURITY_FRONTEND_AUDIT: ['--frontend', '--frontend-only'].includes(mode) ? '1' : '0',
+  SECURITY_MATRIX_ONLY: mode === '--matrix' ? '1' : '0', SECURITY_AUTH_MATRIX: ['--frontend', '--frontend-only'].includes(mode) ? '0' : '1',
+  SECURITY_FOCUSED_AUDIT: ['--focused', '--matrix', '--frontend-only'].includes(mode) ? '1' : '0', SECURITY_TARGETED_BACKEND: mode === '--recheck' ? '1' : '0' };
 const moto = spawn(python, ['-m', 'moto.server', '-H', '127.0.0.1', '-p', String(port)],
   { env, windowsHide: true, stdio: 'ignore' });
 let exited = false;
@@ -60,7 +61,7 @@ finally {
   client?.destroy(); moto.kill();
   evidence.serverStopped = await Promise.race([motoExit.then(() => true), new Promise(done => setTimeout(() => done(false), 5000))]);
   if (!evidence.serverStopped) evidence.status = 'failed';
-  writeFileSync(resolve(root, `infra/security/evidence/${mode === '--matrix' ? 'storage-matrix' : mode === '--focused' ? 'storage-focused' : mode === '--recheck' ? 'storage-recheck' : 'storage-gates'}.json`), JSON.stringify(evidence, null, 2) + '\n');
+  writeFileSync(resolve(root, `infra/security/evidence/${mode === '--frontend-only' ? 'storage-frontend-only' : mode === '--frontend' ? 'storage-frontend' : mode === '--matrix' ? 'storage-matrix' : mode === '--focused' ? 'storage-focused' : mode === '--recheck' ? 'storage-recheck' : 'storage-gates'}.json`), JSON.stringify(evidence, null, 2) + '\n');
 }
 console.log(`Storage simulation result: ${evidence.status}; server stopped: ${evidence.serverStopped}`);
 process.exitCode = evidence.status === 'passed-local-simulation-only' ? 0 : evidence.status === 'focused-only' ? 3 : 1;
