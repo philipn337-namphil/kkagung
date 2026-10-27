@@ -22,6 +22,8 @@
 | `OBJECT_STORAGE_BUCKET_PRIVATE` | `kkagung-images-private` | 사진 업로드 503 |
 | `OBJECT_STORAGE_ACCESS_KEY` / `SECRET_KEY` | NCP 인증키 | 사진 업로드 503 |
 | `ENABLE_TEST_ACCOUNTS` | 비움 | 운영에서는 켜도 라우터가 등록되지 않지만 비워 둔다 |
+| `APP_IMAGE` | `<레지스트리>.kr.ncr.ntruss.com/kkagung-api:<태그>` | Init Script 가 기동 전에 멈춘다 |
+| `NCP_ACCESS_KEY` / `NCP_SECRET_KEY` | NCP API 인증키 | 레지스트리 로그인 실패로 기동하지 않는다 |
 | **`ADMIN_ALLOWED_IP_CIDRS`** | 관리자 접속 대역 | **운영에서 비우면 관리자 API 가 전부 403 이다.** 개발에서만 "제한 없음"으로 동작한다 |
 
 `TRUST_PROXY`를 빠뜨리면 기동은 되지만 부하가 몰리는 순간 전원이 429 를 맞는다. 배포 점검 항목에 반드시 넣는다.
@@ -212,16 +214,44 @@ curl -s -o /dev/null -w '%{http_code}
 
 ## 3. 앱 서버와 로드밸런서
 
-1. 서버 이미지에 Docker 와 애플리케이션 이미지를 포함한다
-2. Init Script 가 환경변수를 주입하고 컨테이너를 기동한다 — `infra/ncp/init-script.sh`
+### 이미지는 Container Registry 를 거친다
+
+서버 이미지에는 Docker 만 넣고, 애플리케이션 이미지는 기동할 때 받는다.
+이미지를 서버 이미지에 구우면 백엔드를 한 줄 고칠 때마다 서버 이미지를 다시 만들어야 하고,
+Auto Scaling 으로 증설된 서버가 옛 코드로 뜬다.
+
+레지스트리 주소는 공인이다. VPC 에서는 Private Endpoint 를 쓸 수 없으므로(Classic 전용)
+**앱 서브넷의 NAT Gateway 경로가 여기서 쓰인다.** 경로가 없으면 `docker pull` 에서 멈춘다.
+
+로그인 계정은 Object Storage 와 같은 NCP API 인증키다. Access Key ID 가 아이디,
+Secret Key 가 비밀번호다.
+
+```bash
+# 로컬 또는 CI 에서 한 번
+docker build -t "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)" backend
+printf '%s' "$NCP_SECRET_KEY" | docker login "$REGISTRY" -u "$NCP_ACCESS_KEY" --password-stdin
+docker push "${REGISTRY}/kkagung-api:$(git rev-parse --short HEAD)"
+```
+
+태그는 커밋 해시로 둔다. `latest` 로 두면 증설된 서버가 어떤 코드로 떴는지 알 수 없고,
+되돌릴 지점도 사라진다.
+
+### 순서
+
+1. Container Registry 에 레지스트리를 만들고 위 명령으로 이미지를 올린다
+2. 서버 이미지에 Docker 를 설치해 둔다. 애플리케이션 이미지는 넣지 않는다
+3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다
+4. Init Script 로 `infra/ncp/init-script.sh` 를 지정한다
    - 비밀값은 스크립트에 적지 않는다. 콘솔의 서버 환경변수로 넘기고 스크립트는 읽기만 한다
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
+   - 레지스트리 비밀번호는 표준입력으로 넘긴다. 인자로 주면 `ps` 출력에 그대로 보인다
+   - 받아오기를 먼저 하고 기존 컨테이너를 지운다. 반대로 하면 `pull` 이 실패했을 때
+     되돌릴 것 없이 서비스만 내려간다
+   - 끝나면 `docker logout` 한다. 자격증명이 인스턴스의 `~/.docker/config.json` 에 남는다
    - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
    - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
-3. 서버는 `kkagung-sn-app` 에 만들고 ACG 는 `kkagung-acg-app` 을 붙인다.
-   이 서브넷의 Route Table 에 NAT Gateway 경로가 있어야 Object Storage 에 닿는다(1단계 참고)
-4. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
-5. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
+5. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
+6. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
 ---
 
@@ -280,4 +310,5 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
+- [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
 - [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)

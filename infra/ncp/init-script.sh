@@ -2,8 +2,12 @@
 #
 # NCP App Server Init Script
 #
-# 서버 이미지에 Docker 와 애플리케이션 이미지가 포함돼 있다는 전제로, 기동 시점에
-# 환경변수를 주입하고 컨테이너를 띄운다. Auto Scaling 으로 새로 뜨는 서버도 같은 스크립트를 쓴다.
+# 서버 이미지에 Docker 가 설치돼 있다는 전제로, 기동 시점에 Container Registry 에서
+# 애플리케이션 이미지를 받아 환경변수를 주입하고 컨테이너를 띄운다. Auto Scaling 으로
+# 새로 뜨는 서버도 같은 스크립트를 쓰므로, 증설된 서버가 최신 이미지를 받는다.
+#
+# 레지스트리는 공인 주소다. VPC 에서는 Private Endpoint 를 쓸 수 없으므로(Classic 전용),
+# 앱 서브넷에 NAT Gateway 경로가 있어야 이 스크립트가 동작한다.
 #
 # 비밀값은 이 파일에 적지 않는다. 아래 "주입받는 값"을 콘솔의 서버 환경변수나
 # 별도 비밀 관리 수단으로 넘기고, 이 스크립트는 그 값을 읽기만 한다.
@@ -20,6 +24,8 @@ CONTAINER_NAME="kkagung-api"
 #   OBJECT_STORAGE_ACCESS_KEY    NCP 인증키
 #   OBJECT_STORAGE_SECRET_KEY    NCP 인증키
 #   FRONTEND_URL                 서비스 도메인 (HTTPS)
+#   NCP_ACCESS_KEY               Container Registry 로그인. Object Storage 와 같은 NCP API 인증키
+#   NCP_SECRET_KEY               위 인증키의 시크릿
 #   OBJECT_STORAGE_ENDPOINT      NCP Object Storage 엔드포인트
 #   OBJECT_STORAGE_PUBLIC_ENDPOINT  브라우저가 공개 이미지를 받는 주소
 : "${DATABASE_URL:?DATABASE_URL 을 지정할 것}"
@@ -28,6 +34,30 @@ CONTAINER_NAME="kkagung-api"
 : "${OBJECT_STORAGE_SECRET_KEY:?OBJECT_STORAGE_SECRET_KEY 를 지정할 것}"
 : "${FRONTEND_URL:?FRONTEND_URL 을 지정할 것}"
 : "${OBJECT_STORAGE_ENDPOINT:?OBJECT_STORAGE_ENDPOINT 를 지정할 것}"
+: "${NCP_ACCESS_KEY:?NCP_ACCESS_KEY 를 지정할 것}"
+: "${NCP_SECRET_KEY:?NCP_SECRET_KEY 를 지정할 것}"
+
+# 레지스트리 주소는 이미지 이름에서 꺼낸다. 따로 받으면 둘이 어긋난 채로 기동할 수 있다.
+REGISTRY_HOST="${APP_IMAGE%%/*}"
+case "${REGISTRY_HOST}" in
+  *.*) ;;
+  *)
+    echo "APP_IMAGE 는 레지스트리 주소를 포함한 전체 이름이어야 한다." >&2
+    echo "  예) <레지스트리>.kr.ncr.ntruss.com/kkagung-api:<태그>" >&2
+    exit 1
+    ;;
+esac
+
+# 비밀번호를 인자로 넘기면 ps 출력에 그대로 보인다. 표준입력으로 넘긴다.
+printf '%s' "${NCP_SECRET_KEY}" | docker login "${REGISTRY_HOST}" -u "${NCP_ACCESS_KEY}" --password-stdin
+
+# docker login 은 자격증명을 ~/.docker/config.json 에 남긴다. 인스턴스에 두지 않는다.
+# 중간에 실패해도 지워지도록 trap 으로 건다.
+trap 'docker logout "${REGISTRY_HOST}" >/dev/null 2>&1 || true' EXIT
+
+# 받아오는 것이 먼저다. 돌던 컨테이너를 먼저 지우면 pull 이 실패했을 때
+# 되돌릴 것도 없이 서비스만 내려간다.
+docker pull "${APP_IMAGE}"
 
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
