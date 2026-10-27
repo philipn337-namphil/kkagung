@@ -49,11 +49,12 @@ describe('frontend profile output encoding (renderer, no browser script executio
       window: { addEventListener: () => {}, scrollTo: () => {} },
       sessionStorage: { getItem: () => null },
       location: { hash: '#/' },
-      document: { querySelector: () => ({ innerHTML: '', querySelector: () => null }) },
+      document: { querySelector: (selector: string) => selector === '#app' ? { innerHTML: '', querySelector: () => null } : null },
     };
     const source = readFileSync(resolve(root, 'frontend/app.js'), 'utf8');
-    vm.runInNewContext(source + `\nstate.profile = { displayName: ${JSON.stringify(marker)}, intro: ${JSON.stringify(marker)} }; globalThis.output = profile();`, sandbox);
+    vm.runInNewContext(source + `\nstate.me = { profile: { displayName: ${JSON.stringify(marker)}, intro: ${JSON.stringify(marker)} } }; globalThis.output = profile(); globalThis.escaped = escapeHtml(${JSON.stringify(marker)});`, sandbox);
     expect(sandbox.output.includes(marker)).toBe(false);
+    expect(sandbox.output.includes(sandbox.escaped)).toBe(true);
   });
 });
 
@@ -118,17 +119,24 @@ describe('frontend server logout ordering', () => {
   it.each([true, false])('removes local token only after successful server revocation (%s)', async success => {
     const removed: string[] = [];
     const calls: string[] = [];
+    let logoutHandler: (() => Promise<void>) | undefined;
+    const app = { innerHTML: '' };
+    const logout = { addEventListener: (_name: string, handler: () => Promise<void>) => { logoutHandler = handler; } };
     const sandbox: any = {
       window: { addEventListener: () => {}, scrollTo: () => {} },
-      sessionStorage: { getItem: () => 'synthetic-fixture', removeItem: (key: string) => removed.push(key) },
+      sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: (key: string) => removed.push(key) },
       location: { hash: '#/' },
-      document: { querySelector: () => ({ innerHTML: '', querySelector: () => null }) },
-      fetch: async (url: string) => { calls.push(url); return { ok: success, json: async () => ({ success, data: {}, error: { message: 'Synthetic failure' } }) }; },
+      document: { querySelector: (selector: string) => selector === '#app' ? app : selector === '#logout' ? logout : null },
+      fetch: async (url: string) => { calls.push(url); return { ok: success, status: success ? 200 : 500,
+        json: async () => ({ success, data: {}, error: { message: 'Synthetic failure' } }) }; },
     };
     const source = readFileSync(resolve(root, 'frontend/app.js'), 'utf8');
-    const operation = vm.runInNewContext(source + '\napi.signOut();', sandbox);
-    if (success) { await operation; expect(removed).toEqual(['kkagung_token']); }
-    else { await expect(operation).rejects.toThrow('Synthetic failure'); expect(removed).toEqual([]); }
+    const context = vm.createContext(sandbox);
+    vm.runInContext(source + "\nstate.token='synthetic-fixture';state.user={id:'1',role:'USER'};", context);
+    expect(logoutHandler).toBeTypeOf('function');
+    await logoutHandler!();
+    if (success) { expect(removed).toEqual(['kkagung.access-token']); expect(vm.runInContext('state.token', context)).toBeNull(); }
+    else { expect(removed).toEqual([]); expect(vm.runInContext('state.token', context)).toBe('synthetic-fixture'); }
     expect(calls).toEqual(['http://localhost:8080/api/v1/auth/logout']);
   });
 });

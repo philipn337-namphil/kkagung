@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-10-27T00:53:19.635Z",
+  "mode": "real isolated portable MySQL; synthetic data",
+  "status": "failed-tests",
+  "steps": {
+    "initialize-new-data-directory": true,
+    "database-ready": true,
+    "mysql-version": true,
+    "source-commit": true,
+    "prisma-generate": true,
+    "migration": true,
+    "synthetic-seed": true,
+    "build": true,
+    "backend-tests": null,
+    "live-db-audit": true,
+    "image-state-audit": false,
+    "backup": true,
+    "restore-database": true,
+    "restore-import": true,
+    "table-list": true,
+    "row-counts": true,
+    "checksums": true
+  },
+  "cloudStorageVerified": false,
+  "productionRpoMeasured": false,
+  "productionRtoMeasured": false,
+  "mysqlVersion": "8.4.13",
+  "backendCommit": "5842e3c5f8d94e6df0df47db7298845fe4451251",
+  "testReport": {
+    "notRun": true,
+    "reason": "explicit focused security audit; full suite evidence retained separately"
+  },
+  "restore": {
+    "success": true,
+    "tables": 20,
+    "rowCountsAndChecksumsMatch": true,
+    "localDumpRestoreVerifyMs": 53267
+  },
+  "serverExitCode": 0,
+  "serverStopped": true,
+  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-82e906f677a7536f"
+}
