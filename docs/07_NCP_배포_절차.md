@@ -22,7 +22,7 @@
 | `OBJECT_STORAGE_BUCKET_PRIVATE` | `kkagung-images-private` | 사진 업로드 503 |
 | `OBJECT_STORAGE_ACCESS_KEY` / `SECRET_KEY` | NCP 인증키 | 사진 업로드 503 |
 | `ENABLE_TEST_ACCOUNTS` | 비움 | 운영에서는 켜도 라우터가 등록되지 않지만 비워 둔다 |
-| `ADMIN_ALLOWED_IP_CIDRS` | 관리자 접속 대역 | 비우면 IP 제한을 적용하지 않는다 |
+| **`ADMIN_ALLOWED_IP_CIDRS`** | 관리자 접속 대역 | **운영에서 비우면 관리자 API 가 전부 403 이다.** 개발에서만 "제한 없음"으로 동작한다 |
 
 `TRUST_PROXY`를 빠뜨리면 기동은 되지만 부하가 몰리는 순간 전원이 429 를 맞는다. 배포 점검 항목에 반드시 넣는다.
 
@@ -202,3 +202,4 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 원본 버킷이 비공개인가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
+- [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)
