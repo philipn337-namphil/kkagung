@@ -22,6 +22,7 @@
 | `OBJECT_STORAGE_BUCKET_PRIVATE` | `kkagung-images-private` | 사진 업로드 503 |
 | `OBJECT_STORAGE_ACCESS_KEY` / `SECRET_KEY` | NCP 인증키 | 사진 업로드 503 |
 | `ENABLE_TEST_ACCOUNTS` | 비움 | 운영에서는 켜도 라우터가 등록되지 않지만 비워 둔다 |
+| `FRONTEND_IMAGE` | 프론트도 같은 서버에 둘 때만 | 비우면 API 컨테이너만 뜬다 |
 | `APP_IMAGE` | `<레지스트리>.kr.ncr.ntruss.com/kkagung-api:<태그>` | Init Script 가 기동 전에 멈춘다 |
 | `NCP_ACCESS_KEY` / `NCP_SECRET_KEY` | NCP API 인증키 | 레지스트리 로그인 실패로 기동하지 않는다 |
 | **`ADMIN_ALLOWED_IP_CIDRS`** | 관리자 접속 대역 | **운영에서 비우면 관리자 API 가 전부 403 이다.** 개발에서만 "제한 없음"으로 동작한다 |
@@ -75,7 +76,31 @@ RUN_MIGRATIONS_ON_START=false
 
 ### 프론트
 
-`API_BASE_URL` 환경변수를 서비스 도메인(HTTPS)으로 준다. 코드 수정은 필요 없다.
+프론트는 **앱 서버에 API 컨테이너와 함께 띄우고, LB 가 경로로 나눠 보낸다.**
+
+```
+/api/*  → 앱 컨테이너  8080
+그 외    → 프론트 컨테이너 5173
+```
+
+같은 주소에서 화면과 API 가 모두 나오므로, 제출물을 받는 사람이 LB 주소 하나로 화면까지 본다.
+
+#### CORS 는 Origin 하나만 허용한다
+
+`app.ts` 가 `cors({ origin: config.corsOrigin })` 로 값 하나만 받는다. allowlist 가 아니라
+**브라우저가 보는 주소와 정확히 같아야 한다.** 위 구성에서는 프론트와 API 가 같은 Origin 이라
+`FRONTEND_URL` 과 브라우저 주소가 자연히 일치한다.
+
+#### `API_BASE_URL` 은 `/` 로 둔다
+
+같은 Origin 이므로 절대 주소가 필요 없다. 코드 수정도 필요 없다.
+
+```
+API_BASE_URL=/  →  window.API_BASE_URL = "/"  →  요청 경로 /api/v1/...
+```
+
+`app.js` 가 끝의 `/` 를 떼고 `/api/v1` 을 붙이므로 그대로 상대경로가 된다. 실제로 확인했다.
+
 정적 파일은 allowlist 로 제한되어 있어 `server.js`·`.env` 같은 파일은 제공되지 않는다(SEC-11).
 
 ---
@@ -112,8 +137,8 @@ ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서
 
 | ACG | 인바운드 허용 | 아웃바운드 허용 |
 |---|---|---|
-| `kkagung-acg-lb` | 인터넷 → 443 | `kkagung-acg-app` → 8080 |
-| `kkagung-acg-app` | `kkagung-acg-lb` → 8080 | **열어야 한다.** 아래 참고 |
+| `kkagung-acg-lb` | 인터넷 → 80 | `kkagung-acg-app` → 8080, 5173 |
+| `kkagung-acg-app` | `kkagung-acg-lb` → 8080, 5173 | **열어야 한다.** 아래 참고 |
 | `cloud-mysql-*` | `kkagung-acg-app` → 3306 | Cloud DB 가 자동으로 만든다 |
 
 **아웃바운드는 기본이 비어 있고, NCP ACG 는 규칙에 없으면 막는다.**
@@ -310,8 +335,20 @@ Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에�
    - 끝나면 `docker logout` 한다. 자격증명이 인스턴스의 `~/.docker/config.json` 에 남는다
    - `TRUST_PROXY` 기본 `1`, `RUN_MIGRATIONS_ON_START` 는 `false` 로 고정
    - 기동 후 `/health` 가 통과할 때까지 기다린다. 실패하면 컨테이너 로그를 남기고 종료한다
-6. Load Balancer 를 `kkagung-sn-lb` 에 만들고 HTTPS 리스너에 인증서를 붙인다
+6. Application Load Balancer 를 `kkagung-sn-lb` 에 만든다
+   - 리스너는 **HTTP 80**. 도메인을 확보하지 못해 인증서를 붙일 수 없다(아래 참고)
+   - 경로 규칙으로 `/api/*` 는 8080, 나머지는 5173 으로 보낸다
 7. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
+
+#### HTTPS 를 쓰지 않는다
+
+도메인을 확보하지 못했고, 인증서는 도메인 없이 붙일 수 없다. LB 리스너를 HTTP 로 둔다.
+
+코드는 손댈 것이 없다. https 강제, secure 쿠키, HSTS 가 모두 없고 `FRONTEND_URL` 에
+스킴 검증도 없다. 토큰은 쿠키가 아니라 `sessionStorage` 에 둔다.
+
+**실서비스라면 이대로 두지 않는다.** 평문이라 토큰과 사진 URL 이 경로에서 그대로 보인다.
+도메인을 확보하는 즉시 LB 에 인증서를 붙이고 `FRONTEND_URL`·`API_BASE_URL` 을 https 로 바꾼다.
 
 ---
 
@@ -392,7 +429,8 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] `kkagung-acg-app` 의 **아웃바운드**가 열려 있는가 (비면 `docker pull` 이 타임아웃난다)
 - [ ] 레지스트리 저장 버킷이 `kkagung-registry` 인가 (사진 버킷이 아니어야 한다)
 - [ ] 서버 이미지를 만들 때 쓴 임시 서버·공인 IP·서브넷·ACG 를 반납했는가
-- [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
+- [ ] `FRONTEND_URL` 이 브라우저가 보는 주소와 **정확히** 같은가 (CORS 는 Origin 하나만 받는다)
+- [ ] LB 경로 규칙이 `/api/*` 를 8080 으로, 나머지를 5173 으로 보내는가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
 - [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
 - [ ] 값이 채워진 Init Script 를 저장소에 커밋하지 않았는가 (저장소 파일은 빈 템플릿이어야 한다)

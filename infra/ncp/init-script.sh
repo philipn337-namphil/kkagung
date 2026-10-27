@@ -21,6 +21,7 @@
 set -euo pipefail
 
 CONTAINER_NAME="kkagung-api"
+FRONTEND_CONTAINER="kkagung-frontend"
 
 # ── 콘솔에 등록할 때 큰따옴표 안을 채운다 ───────────────────
 APP_IMAGE=""                   # <레지스트리>.kr.ncr.ntruss.com/kkagung-api:<커밋 해시>
@@ -42,6 +43,13 @@ OBJECT_STORAGE_REGION=""           # (kr-standard)
 OBJECT_STORAGE_FORCE_PATH_STYLE="" # (true)
 JWT_EXPIRES_IN=""                  # (900s) 운영 기본값이라 비워 두면 된다(D-03)
 TRUST_PROXY=""                     # (1) 비우면 모든 사용자가 LB 주소 하나로 집계되어 함께 429 를 맞는다
+
+# ── 프론트를 같은 서버에 둘 때만 채운다 ─────────────────────
+# LB 가 경로로 나눠 보내는 구성(/api/* 는 8080, 나머지는 5173)에서 쓴다.
+# 비워 두면 API 컨테이너만 뜬다.
+FRONTEND_IMAGE=""                  # <레지스트리>.kr.ncr.ntruss.com/kkagung-web:<커밋 해시>
+API_BASE_URL=""                    # (/) 브라우저가 API 를 부르는 주소.
+                                   #     LB 한 대 뒤에 둘 다 있으면 / 로 두어 같은 Origin 으로 부른다.
 
 # 채우지 않은 값이 있으면 여기서 멈춘다. 잘못된 설정으로 조용히 뜨는 것보다 낫다.
 : "${APP_IMAGE:?APP_IMAGE 를 채울 것}"
@@ -77,6 +85,7 @@ trap 'docker logout "${REGISTRY_HOST}" >/dev/null 2>&1 || true' EXIT
 # 받아오는 것이 먼저다. 돌던 컨테이너를 먼저 지우면 pull 이 실패했을 때
 # 되돌릴 것도 없이 서비스만 내려간다.
 docker pull "${APP_IMAGE}"
+[ -n "${FRONTEND_IMAGE}" ] && docker pull "${FRONTEND_IMAGE}"
 
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
@@ -102,16 +111,28 @@ docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped -p 8080:8080 \
   -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS}" \
   "${APP_IMAGE}"
 
-# LB 헬스체크가 붙기 전에 애플리케이션이 뜰 때까지 기다린다.
-# /health 는 DB 연결까지 확인하므로, 여기서 실패하면 LB 에 넣어도 의미가 없다.
-for attempt in $(seq 1 30); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:8080/health"; then
-    echo "application is ready"
-    exit 0
-  fi
-  sleep 2
-done
+# 프론트를 같은 서버에 둘 때만 띄운다. LB 가 경로를 보고 이쪽으로 보낸다.
+# API_BASE_URL 을 / 로 두면 브라우저가 같은 Origin 의 /api/v1 을 부르므로 CORS 가 걸리지 않는다.
+if [ -n "${FRONTEND_IMAGE}" ]; then
+  docker rm -f "${FRONTEND_CONTAINER}" >/dev/null 2>&1 || true
+  docker run -d --name "${FRONTEND_CONTAINER}" --restart unless-stopped -p 5173:5173 -e API_BASE_URL="${API_BASE_URL:-/}" "${FRONTEND_IMAGE}"
+fi
 
-echo "application did not become healthy" >&2
-docker logs --tail 50 "${CONTAINER_NAME}" >&2
-exit 1
+# LB 헬스체크가 붙기 전에 뜰 때까지 기다린다.
+# /health 는 DB 연결까지 확인하므로, 여기서 실패하면 LB 에 넣어도 의미가 없다.
+wait_for() {
+  for _ in $(seq 1 30); do
+    if curl -fsS -o /dev/null "$1"; then return 0; fi
+    sleep 2
+  done
+  echo "$2 did not become healthy" >&2
+  docker logs --tail 50 "$3" >&2
+  return 1
+}
+
+wait_for "http://127.0.0.1:8080/health" "api" "${CONTAINER_NAME}" || exit 1
+if [ -n "${FRONTEND_IMAGE}" ]; then
+  wait_for "http://127.0.0.1:5173/" "frontend" "${FRONTEND_CONTAINER}" || exit 1
+fi
+
+echo "application is ready"
