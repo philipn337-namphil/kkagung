@@ -1,6 +1,7 @@
 {
   "mode": "real HTTP and MySQL",
   "passed": [
+    "untrusted X-Forwarded-For cannot satisfy admin network allowlist",
     "current DB USER cannot change admin settings: 403",
     "setting audit survives client reconnect and records actor plus before/after",
     "invalid setting produces no DB audit or setting mutation",

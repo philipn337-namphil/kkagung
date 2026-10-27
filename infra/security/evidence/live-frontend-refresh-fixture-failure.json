@@ -1,0 +1,87 @@
+{
+  "recordedAt": "2026-10-27T06:56:50.813Z",
+  "mode": "unchanged frontend API client/renderers in VM with minimal DOM; real HTTP/MySQL/Sharp/Moto",
+  "browserRenderingVerified": false,
+  "passed": [
+    "real seed-account login and me through frontend client",
+    "daily and recommendations render from real API",
+    "heart created and received through frontend client",
+    "duplicate heart returns actual 409 without a second DB row or mock success",
+    "report is persisted through frontend API client",
+    "received request accepts into a real room through frontend client",
+    "reverse request rejection through frontend client creates no second room",
+    "message roundtrip and XSS escaping with actual API response",
+    "public card omits original object keys and signed original URLs",
+    "accepted-room original URLs reach the actual storage fixture",
+    "admin dashboard maps actual count response into metric values",
+    "USER admin API forbidden without mock substitution",
+    "block denies fresh message and photo URL; DB receives no new message",
+    "logout revokes token on real backend",
+    "actual API rate limit returns 429 to frontend without mock success",
+    "functional integration never receives mock-eligible network errors or 501",
+    "HTTP 401 stays an error and never becomes mock data",
+    "HTTP 403 stays an error and never becomes mock data",
+    "HTTP 404 stays an error and never becomes mock data",
+    "HTTP 409 stays an error and never becomes mock data",
+    "HTTP 429 stays an error and never becomes mock data",
+    "actual frontend handler serves only public assets and correct API configuration"
+  ],
+  "failed": [
+    {
+      "name": "refresh ticket consumes through frontend client and rejects a second use",
+      "owner": "security",
+      "kind": "ERR_ASSERTION"
+    },
+    {
+      "name": "accepted-room frontend visibly renders authorized original image",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "image status renderer recognizes DONE publicUrl from real response",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "chat restriction disables frontend send form",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "logout clears previous user recommendations and mock interaction cache",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": 3,
+      "expected": 0
+    },
+    {
+      "name": "501 fallback after live success is explicitly labeled mock",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    }
+  ],
+  "observations": {
+    "adminTopLevelFields": [
+      "cardViews",
+      "chatRequests",
+      "chatRoomsCreated",
+      "fortuneOpens",
+      "hearts",
+      "refreshInventory",
+      "reportsPending",
+      "serviceDate",
+      "signups"
+    ],
+    "liveRequests": 138,
+    "mockEligibleLiveResponses": 0
+  },
+  "cloudVerified": false
+}

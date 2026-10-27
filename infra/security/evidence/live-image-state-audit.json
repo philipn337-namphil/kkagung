@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-27T05:40:11.020Z",
+  "mode": "real HTTP/MySQL, actual image processing, Moto S3 simulation",
+  "passed": [
+    "oversized multipart just above 10 MiB returns 413 rather than a transport failure",
+    "compressed multipart above 20 million pixels returns 413",
+    "owner gets normalized original through 60-second signed URL; stranger cannot delete it",
+    "concurrent uploads cannot exceed three photos or duplicate a slot [IMG-01]",
+    "accepted room participants receive only each other original URLs with max 60-second expiry and no-store",
+    "pending, rejected and ignored request states cannot reveal originals even with stale room membership",
+    "either block direction stops accepted-room original URL issuance",
+    "chat sending restriction does not revoke accepted-room photo read access",
+    "active relationship baseline is visible and third party cannot read messages",
+    "SUSPENDED: old token denied; peer recommendations, hearts and rooms exclude account; new messages denied",
+    "WITHDRAWN: old token denied; peer recommendations, hearts and rooms exclude account; new messages denied",
+    "real withdrawal revokes used token and blocks other token from new photo URL issuance"
+  ],
+  "failed": [],
+  "failureKinds": {},
+  "observations": {
+    "oversizedMultipart": {
+      "status": 413
+    },
+    "concurrentUploads": {
+      "statuses": [
+        202,
+        409
+      ],
+      "originalCount": 3,
+      "slot3OriginalCount": 1,
+      "orphanCounts": {
+        "private": 0,
+        "public": 0
+      }
+    }
+  },
+  "cloudPolicyVerified": false,
+  "signatureExpiryVerified": false
+}
