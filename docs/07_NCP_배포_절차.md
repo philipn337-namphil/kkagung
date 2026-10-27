@@ -174,19 +174,39 @@ Prisma Client 가 `@default(now())` 값을 **애플리케이션에서 계산해 
 `OBJECT_STORAGE_PUBLIC_ENDPOINT` 도 같은 값을 쓴다. 브라우저가 받는 공개 이미지 주소는
 `https://kr.object.ncloudstorage.com/kkagung-images-public/<object key>` 가 된다.
 
-#### 공개 버킷에 목록 조회 권한을 주지 않는다
+#### 버킷의 "공개"는 목록 공개다. 객체 공개가 아니다
 
-공개 버킷에 필요한 것은 **객체 읽기**지 **버킷 목록 조회**가 아니다. 목록이 열려 있으면
-인증 없이 전체 키를 받아갈 수 있고, 키에 사용자 ID 가 들어 있어 사용자 목록과 흐림 사진 전부가
-요청 한 번에 나간다.
+콘솔의 권한 관리에서 전체 공개를 켜면 **누구나 버킷의 파일 목록을 조회**할 수 있게 된다.
+개별 파일의 공개 여부는 거기서 정해지지 않고, 올릴 때 객체 ACL 로 따로 준다.
+두 가지가 별개라서 다음 두 조합이 모두 쉽게 나온다.
+
+| 버킷 전체 공개 | 객체 ACL | 결과 |
+|---|---|---|
+| 공개 | 없음 | 목록은 누구나 받아가는데 정작 이미지는 403 이다 |
+| 공개 안함 | `public-read` | **이게 맞는 조합** |
+
+공개 버킷에 두 버킷 모두 **전체 공개를 "공개 안함"으로** 둔다. 목록을 열어 둘 이유가 없다.
+객체 키가 `profiles/blur/<userId>/<uuid>.webp` 라, 목록이 열려 있으면 인증 없는 요청 한 번에
+사용자 ID 목록과 흐림 사진 전부가 나간다.
+
+객체 공개는 애플리케이션이 업로드 시점에 준다. `lib/objectStorage.ts` 의 `putObject` 가
+**버킷을 보고** 공개 버킷이면 `public-read` 를, 원본 버킷이면 아무 권한도 붙이지 않는다.
+호출부가 고르지 않으므로 원본에 공개 권한이 붙는 실수가 나오지 않는다(D-01).
 
 ```bash
-# 목록이 열려 있으면 ListBucketResult 가 돌아온다. 막혀 있으면 AccessDenied 다.
+# 목록이 열려 있으면 ListBucketResult 가, 막혀 있으면 AccessDenied 가 돌아온다. 둘 다 후자여야 한다.
 curl -s https://kr.object.ncloudstorage.com/kkagung-images-public/
-curl -s https://kr.object.ncloudstorage.com/kkagung-images-private/   # 항상 AccessDenied
+curl -s https://kr.object.ncloudstorage.com/kkagung-images-private/
+
+# 사진을 한 장 올린 뒤, 흐림본은 인증 없이 열리고 원본은 열리지 않아야 한다.
+curl -s -o /dev/null -w '%{http_code}
+' https://kr.object.ncloudstorage.com/kkagung-images-public/<흐림본 키>
+curl -s -o /dev/null -w '%{http_code}
+' https://kr.object.ncloudstorage.com/kkagung-images-private/<원본 키>
 ```
 
-권한 설정에서 **모든 사용자**에게는 객체 읽기만 남기고 버킷 조회는 해제한다.
+로컬·CI 저장소는 ACL 을 구현하지 않아 익명 접근이 양쪽 다 거부된다.
+**실제 공개 여부는 NCP 에서만 확인된다.** 자동 테스트는 버킷에 맞는 권한이 요청에 실리는지까지만 본다.
 
 ---
 
@@ -255,7 +275,8 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] 마이그레이션을 배포 단계에서 한 번 적용했는가
 - [ ] `JWT_SECRET` 이 이미지·저장소·로그에 남지 않는가
 - [ ] 원본 버킷이 비공개인가
-- [ ] 공개 버킷의 **목록 조회**가 막혀 있는가 (객체 읽기만 열어 둔다)
+- [ ] 두 버킷 모두 전체 공개가 **"공개 안함"** 인가 (버킷 공개 = 목록 공개다)
+- [ ] 사진을 한 장 올려, 흐림본은 익명으로 열리고 원본은 403 인지 확인했는가
 - [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
 - [ ] `FRONTEND_URL` 과 `API_BASE_URL` 이 HTTPS 도메인인가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
