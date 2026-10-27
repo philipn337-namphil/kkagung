@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const backend = resolve(process.argv[2] ?? '.');
 const id = process.env.SECURITY_DB_RUN_ID;
@@ -29,10 +30,21 @@ const call = async (path, token, method = 'GET', body) => {
   const response = await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}`,
     ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: body instanceof FormData ? body : JSON.stringify(body) } : {}) });
-  return { status: response.status, body: await response.json() };
+  return { status: response.status, body: await response.json(), headers: response.headers };
 };
 let owner;
 try {
+  // Existing chat-room behavior is checked before this script changes fixture states.
+  const rooms = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', 'tests/chatRooms.test.ts',
+    '--reporter=json', '--maxWorkers=1', '--hookTimeout=60000', '--testTimeout=60000'],
+    { cwd: backend, env: process.env, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+  const roomEvidence = { success: rooms.status === 0 && !rooms.error };
+  try {
+    const parsed = JSON.parse(rooms.stdout);
+    Object.assign(roomEvidence, { passed: parsed.numPassedTests, failed: parsed.numFailedTests, pending: parsed.numPendingTests });
+  } catch { roomEvidence.success = false; }
+  writeFileSync(new URL('evidence/chat-room-regression.json', import.meta.url), JSON.stringify(roomEvidence, null, 2) + '\n');
+  if (!roomEvidence.success) result.failed.push('existing chat-room regression');
   await prisma.rateLimitCounter.deleteMany({}); // Guarded, freshly created disposable DB only.
   owner = await prisma.user.findUniqueOrThrow({ where: { email: 'user1@kkagung.local' } });
   const peer = await prisma.user.findUniqueOrThrow({ where: { email: 'user4@kkagung.local' } });
@@ -40,9 +52,9 @@ try {
   await prisma.user.updateMany({ where: { id: { in: [owner.id, peer.id] } }, data: { status: 'ACTIVE', withdrawnAt: null } });
   const token = issueAccessToken(owner), otherToken = issueAccessToken(owner), peerToken = issueAccessToken(peer);
   const bytes = await sharp({ create: { width: 30, height: 20, channels: 3, background: '#c85' } }).withMetadata({ orientation: 6 }).jpeg().toBuffer();
-  const upload = slot => {
+  const upload = (slot, asToken = token) => {
     const form = new FormData(); form.append('file', new Blob([bytes], { type: 'image/jpeg' }), '../../synthetic.jpg');
-    form.append('slot', String(slot)); return call('/me/images', token, 'POST', form);
+    form.append('slot', String(slot)); return call('/me/images', asToken, 'POST', form);
   };
   const uploaded = await upload(2); assert.equal(uploaded.status, 202);
   await test('oversized multipart just above 10 MiB returns 413 rather than a transport failure', async () => {
@@ -100,6 +112,48 @@ try {
   const room = await prisma.chatRoom.create({ data: { chatRequestId: request.id,
     members: { create: [{ userId: owner.id }, { userId: peer.id }] } } });
   const roomPath = `/chat-rooms/${room.id}`;
+  const peerPhoto = await upload(2, peerToken); assert.equal(peerPhoto.status, 202);
+  await test('accepted room participants receive only each other original URLs with max 60-second expiry and no-store', async () => {
+    for (const [asToken, photoId] of [[peerToken, uploaded.body.data.imageId], [token, peerPhoto.body.data.imageId]]) {
+      const response = await call(roomPath, asToken); assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      const originals = response.body.data.partner.originalImages;
+      assert.ok(originals.length > 0 && originals.length <= 3);
+      const photo = originals.find(row => row.imageId === photoId); assert.ok(photo);
+      assert.deepEqual(Object.keys(photo).sort(), ['expiresAt', 'imageId', 'url']);
+      assert.equal(new URL(photo.url).searchParams.get('X-Amz-Expires'), '60');
+      assert.ok(Date.parse(photo.expiresAt) - Date.now() <= 60000);
+      const downloaded = await fetch(photo.url); assert.equal(downloaded.status, 200); await downloaded.arrayBuffer();
+    }
+    const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@kkagung.local' } });
+    assert.equal((await call(roomPath, issueAccessToken(admin))).status, 403);
+  });
+  await test('pending, rejected and ignored request states cannot reveal originals even with stale room membership', async () => {
+    try {
+      for (const status of ['PENDING', 'REJECTED', 'IGNORED']) {
+        await prisma.chatRequest.update({ where: { id: request.id }, data: { status } });
+        assert.equal((await call(roomPath, peerToken)).status, 404);
+      }
+    } finally { await prisma.chatRequest.update({ where: { id: request.id }, data: { status: 'ACCEPTED' } }); }
+  });
+  await test('either block direction stops accepted-room original URL issuance', async () => {
+    for (const byOwner of [true, false]) {
+      const block = await prisma.block.create({ data: { blockerId: byOwner ? owner.id : peer.id, targetUserId: byOwner ? peer.id : owner.id } });
+      try {
+        for (const asToken of [token, peerToken]) {
+          const response = await call(roomPath, asToken); assert.equal(response.status, 200);
+          assert.deepEqual(response.body.data.partner.originalImages, []);
+        }
+      } finally { await prisma.block.delete({ where: { id: block.id } }); }
+    }
+  });
+  await test('chat sending restriction does not revoke accepted-room photo read access', async () => {
+    await prisma.user.update({ where: { id: owner.id }, data: { status: 'CHAT_RESTRICTED' } });
+    try {
+      const response = await call(roomPath, token); assert.equal(response.status, 200);
+      assert.equal(response.body.data.canSendMessage, false); assert.ok(response.body.data.partner.originalImages.length > 0);
+    } finally { await prisma.user.update({ where: { id: owner.id }, data: { status: 'ACTIVE' } }); }
+  });
   const visible = async () => {
     const recs = await call('/recommendations/today', peerToken), hearts = await call('/hearts/received', peerToken), rooms = await call('/chat-rooms', peerToken);
     assert.equal(recs.status, 200); assert.equal(hearts.status, 200); assert.equal(rooms.status, 200);

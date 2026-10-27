@@ -1,6 +1,6 @@
 {
-  "baselineCommit": "5842e3c5f8d94e6df0df47db7298845fe4451251",
-  "recordedAt": "2026-10-27T00:29:36.059Z",
+  "baselineCommit": "856d507d1b5a4e8483e2925cc4b8d57ded23f5f5",
+  "recordedAt": "2026-10-27T04:42:02.501Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "sourceHashes": {
@@ -15,13 +15,14 @@
     "backend/src/middleware/rateLimit.ts": "73940c346809eb98c44b5ae3dad7183470f927b20c6a690e0213efe0def320e2",
     "backend/prisma/schema.prisma": "e3e14e5d48a614a7a5c7de775fe458331aaa4adede3e107fc1fe722502aa4019",
     "backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql": "0a1af2390c19a36cb48600b0b5fda08459b6c1d41754575641cf533037ec7d65",
-    "infra/security/tests/phase2.test.ts": "31936286c6ba266715304da20fa52843bdf71540f6b06be69a4e958663620dda",
+    "infra/security/tests/phase2.test.ts": "8824bf92f798ced0796d5b539ac582e3fff7292771f96ad7a745cb7b4db330c4",
     "infra/security/tests/frontend-config.test.ts": "16716719b6ee2d85c7cd40614c707366b947d86b44a2a40ab9fbf5cbedf435be",
     "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab",
     "infra/security/tests/upload-processing.test.ts": "2f9bdfdeba990486e8136c35189fe494ac664792a742e24ce02f125f5229e825",
     "backend/src/lib/imageProcessing.ts": "bd0e0672f5a547c5954175e5aaf8c6350256ad4adb26c4b4d92bc94b526765e5",
-    "backend/src/lib/objectStorage.ts": "b3ace516fa47e064b3a02df861f6cf598b9b8f4c0807b543c5c893ee66f0037f",
-    "backend/src/routes/images.ts": "8d1840967911c2c127fbaa31f4a0714f8603b63797a8d4a0e055e11d5c57dec0"
+    "backend/src/lib/objectStorage.ts": "7f3f5dd5aa5d85f838d1429ad81ba774e5cc3704ecf50cdc567eec88568f494a",
+    "backend/src/routes/images.ts": "14c2ca5f6e3a6ab1f2326dfc89678e5912accd17f7e0c665be9ddf8561a4cc8e",
+    "backend/src/routes/chatRooms.ts": "8ae9c06303ff868b6f5dc9525c0f7b5965e2cc7ee70ca4470edcc7bad680bb9e"
   },
   "build": {
     "exitCode": 0,
@@ -31,8 +32,8 @@
     "exitCode": 0,
     "passed": 84,
     "failed": 0,
-    "pending": 4,
-    "total": 88,
+    "pending": 2,
+    "total": 86,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -313,14 +314,6 @@
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required merged real admin endpoint returns 403 for USER",
         "status": "passed"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required private original photo denied before acceptance and allowed only to participants",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required disguised extension, invalid MIME, oversize and excessive pixels rejected; EXIF removed",
-        "status": "skipped"
       },
       {
         "name": "Phase 2 integration gates: implementation/infrastructure required recommendation/heart/chat ownership, sanction and withdrawal restrictions enforced",

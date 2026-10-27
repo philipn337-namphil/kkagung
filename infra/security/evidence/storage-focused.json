@@ -1,8 +1,8 @@
 {
-  "recordedAt": "2026-10-27T00:52:09.280Z",
+  "recordedAt": "2026-10-27T04:39:42.552Z",
   "storageMode": "Moto S3 simulation on loopback; not NCP",
   "signatureExpiryVerified": false,
   "cloudBucketPolicyVerified": false,
-  "status": "failed",
+  "status": "focused-only",
   "serverStopped": true
 }

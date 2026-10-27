@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [mysqlHome, python, motoPackages, mode] = process.argv.slice(2);
-if (mode && mode !== '--focused') throw new Error('Unknown mode');
+if (mode && !['--focused', '--recheck'].includes(mode)) throw new Error('Unknown mode');
 if (!mysqlHome || !python || !motoPackages) throw new Error('Usage: run-storage-gates.mjs <mysqlHome> <python> <motoPackages>');
 const require = createRequire(resolve(root, 'backend/package.json'));
 const { S3Client, CreateBucketCommand, PutBucketPolicyCommand } = require('@aws-sdk/client-s3');
@@ -24,7 +24,7 @@ const env = { ...process.env, PYTHONPATH: resolve(motoPackages), AWS_EC2_METADAT
   OBJECT_STORAGE_ACCESS_KEY: randomBytes(16).toString('hex'), OBJECT_STORAGE_SECRET_KEY: randomBytes(32).toString('hex'),
   OBJECT_STORAGE_BUCKET_PUBLIC: 'kkagung-drill-public', OBJECT_STORAGE_BUCKET_PRIVATE: 'kkagung-drill-private',
   OBJECT_STORAGE_FORCE_PATH_STYLE: 'true', S3_IGNORE_SUBDOMAIN_BUCKETNAME: 'true', TRUST_PROXY: '', SECURITY_IMAGE_STATE_AUDIT: '1',
-  SECURITY_FOCUSED_AUDIT: mode === '--focused' ? '1' : '0' };
+  SECURITY_FOCUSED_AUDIT: mode === '--focused' ? '1' : '0', SECURITY_TARGETED_BACKEND: mode === '--recheck' ? '1' : '0' };
 const moto = spawn(python, ['-m', 'moto.server', '-H', '127.0.0.1', '-p', String(port)],
   { env, windowsHide: true, stdio: 'ignore' });
 let exited = false;
@@ -59,7 +59,7 @@ finally {
   client?.destroy(); moto.kill();
   evidence.serverStopped = await Promise.race([motoExit.then(() => true), new Promise(done => setTimeout(() => done(false), 5000))]);
   if (!evidence.serverStopped) evidence.status = 'failed';
-  writeFileSync(resolve(root, `infra/security/evidence/${mode === '--focused' ? 'storage-focused' : 'storage-gates'}.json`), JSON.stringify(evidence, null, 2) + '\n');
+  writeFileSync(resolve(root, `infra/security/evidence/${mode === '--focused' ? 'storage-focused' : mode === '--recheck' ? 'storage-recheck' : 'storage-gates'}.json`), JSON.stringify(evidence, null, 2) + '\n');
 }
 console.log(`Storage simulation result: ${evidence.status}; server stopped: ${evidence.serverStopped}`);
-process.exitCode = evidence.status === 'passed-local-simulation-only' ? 0 : 1;
+process.exitCode = evidence.status === 'passed-local-simulation-only' ? 0 : evidence.status === 'focused-only' ? 3 : 1;

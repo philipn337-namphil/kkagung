@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, unlinkSync, existsSync, openSync, closeSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,7 +87,10 @@ try {
   if (process.env.SECURITY_FOCUSED_AUDIT === '1') {
     evidence.steps['backend-tests'] = null; evidence.testReport = { notRun: true, reason: 'explicit focused security audit; full suite evidence retained separately' };
   } else {
-  const tests = node(['node_modules/vitest/vitest.mjs', 'run', '--reporter=json', '--hookTimeout=60000', '--testTimeout=30000'], 600000);
+  const selection = process.env.SECURITY_TARGETED_BACKEND === '1' ? ['tests/dev.test.ts', 'tests/trustProxy.test.ts', 'tests/images.test.ts'] : [];
+  evidence.backendSelection = selection.length ? selection : 'all';
+  const tests = node(['node_modules/vitest/vitest.mjs', 'run', ...selection, '--reporter=json', '--hookTimeout=60000',
+    `--testTimeout=${selection.length ? 60000 : 30000}`, '--maxWorkers=1'], 600000);
   writeFileSync(resolve(runDir, 'tests-private.json'), tests.stdout ?? '');
   writeFileSync(resolve(runDir, 'tests-private.stderr.log'), tests.stderr ?? '');
   evidence.steps['backend-tests'] = tests.status === 0 && !tests.error;
@@ -116,15 +119,20 @@ try {
   check(mysql([restored], dump), 'restore-import');
   const tables = check(sql('SHOW TABLES', database), 'table-list').trim().split(/\r?\n/).filter(Boolean);
   if (!tables.length || tables.some(table => !/^[A-Za-z0-9_]+$/.test(table))) throw new Error('table-identifiers');
-  const fingerprints = db => tables.map(table => {
-    const count = check(sql(`SELECT COUNT(*) FROM \`${table}\``, db), 'row-counts').trim();
-    const checksum = check(sql(`CHECKSUM TABLE \`${table}\` EXTENDED`, db), 'checksums').trim().split('\t')[1];
-    if (!checksum || checksum === 'NULL') throw new Error('unsupported-checksum');
-    return { table, count, checksum };
-  });
-  const before = fingerprints(database), after = fingerprints(restored);
-  if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('restore-mismatch');
+  const rowCounts = db => check(sql(tables.map(table => `SELECT '${table}', COUNT(*) FROM \`${table}\``).join(' UNION ALL '), db), 'row-counts').trim();
+  const logicalHash = db => {
+    const rows = check(exec(resolve(mysqlHome, 'bin/mysqldump.exe'), ['--no-defaults', '--protocol=TCP',
+      '--host=127.0.0.1', `--port=${port}`, '--user=root', '--single-transaction', '--no-tablespaces',
+      '--set-gtid-purged=OFF', '--no-create-info', '--skip-comments', '--skip-dump-date', '--skip-extended-insert',
+      '--order-by-primary', '--compact', db], env), 'logical-data-dump');
+    return createHash('sha256').update(rows).digest('hex');
+  };
+  const beforeCounts = rowCounts(database), afterCounts = rowCounts(restored);
+  const beforeHash = logicalHash(database), afterHash = logicalHash(restored);
+  if (beforeCounts !== afterCounts || beforeHash !== afterHash) throw new Error('restore-mismatch');
   evidence.restore = { success: true, tables: tables.length, rowCountsAndChecksumsMatch: true,
+    checksumMethod: 'SHA-256 of primary-key-ordered logical row dump; no timestamps/comments/DDL',
+    sourceSha256: beforeHash, restoredSha256: afterHash,
     localDumpRestoreVerifyMs: Math.round(performance.now() - started) };
   const auditsPassed = evidence.steps['live-db-audit'] && evidence.steps['image-state-audit'] !== false;
   evidence.status = auditsPassed && evidence.steps['backend-tests'] === null ? 'focused-only'
@@ -141,7 +149,7 @@ finally {
   }
   // Retain only the disposable local data directory for diagnosis; never copy it into Git.
   evidence.runtimeDirectory = runDir;
-  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
+  writeFileSync(resolve(root, `infra/security/evidence/${process.env.SECURITY_FOCUSED_AUDIT === '1' ? 'portable-db-focused' : process.env.SECURITY_TARGETED_BACKEND === '1' ? 'portable-db-recheck' : 'portable-db-drill'}.json`), JSON.stringify(evidence, null, 2) + '\n');
   console.log(JSON.stringify({ status: evidence.status, steps: evidence.steps, failedStage: evidence.failedStage,
     tests: evidence.tests && { passed: evidence.tests.passed, failed: evidence.tests.failed, pending: evidence.tests.pending },
     restore: evidence.restore, serverStopped: evidence.serverStopped }, null, 2));

@@ -1,0 +1,169 @@
+{
+  "recordedAt": "2026-10-27T04:33:39.422Z",
+  "mode": "real isolated portable MySQL; synthetic data",
+  "status": "failed",
+  "steps": {
+    "initialize-new-data-directory": true,
+    "database-ready": true,
+    "mysql-version": true,
+    "source-commit": true,
+    "prisma-generate": true,
+    "migration": true,
+    "synthetic-seed": true,
+    "build": true,
+    "backend-tests": true,
+    "live-db-audit": true,
+    "image-state-audit": true,
+    "backup": true,
+    "restore-database": true,
+    "restore-import": true,
+    "table-list": true,
+    "row-counts": true,
+    "checksums": true
+  },
+  "cloudStorageVerified": false,
+  "productionRpoMeasured": false,
+  "productionRtoMeasured": false,
+  "mysqlVersion": "8.4.13",
+  "backendCommit": "856d507d1b5a4e8483e2925cc4b8d57ded23f5f5",
+  "backendSelection": [
+    "tests/dev.test.ts",
+    "tests/trustProxy.test.ts",
+    "tests/images.test.ts"
+  ],
+  "tests": {
+    "passed": 31,
+    "failed": 0,
+    "pending": 0,
+    "cases": [
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 켜면 시드 계정을 모두 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 응답에 비밀번호 관련 필드가 전혀 없다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 끄면 404 RESOURCE_NOT_FOUND 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/dev/test-accounts 스위치를 켜도 운영 환경이면 404 를 반환한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 일반 시드 계정은 토큰을 발급한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 정지된 계정은 403 SUSPENDED_USER 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/dev/test-accounts/:accountId/token 없는 계정은 404 RESOURCE_NOT_FOUND 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 원본과 흐림본을 저장하고 AI 는 처리 대기로 남긴다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 빈 자리를 찾아 차례로 채우고 네 번째는 409 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 이름만 이미지인 파일은 415 로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images MIME 를 속여도 실제 내용으로 판정한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 빈 파일은 400 으로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 용량을 넘기면 413 으로 거절한다",
+        "status": "passed"
+      },
+      {
+        "name": "POST /api/v1/me/images 로그인하지 않으면 401 이다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/images 원본은 짧은 서명 URL 로만 주고 object key 는 응답에 넣지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/images 서명 없이 원본 주소에 접근하면 저장소가 거부한다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/images 흐림본은 익명으로 받을 수 있다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/images 다른 사람의 사진은 보이지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "GET /api/v1/me/images/status 공개 버전의 처리 상태만 돌려준다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/me/images/:imageId 같은 자리의 원본·흐림본·AI 를 함께 지운다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/me/images/:imageId 남의 사진은 있는지 여부도 알리지 않고 404 다",
+        "status": "passed"
+      },
+      {
+        "name": "DELETE /api/v1/me/images/:imageId 없는 사진은 404 다",
+        "status": "passed"
+      },
+      {
+        "name": "같은 자리 동시 업로드 (IMG-01) 한쪽은 409 로 밀리고 저장소에 주인 없는 객체를 남기지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "TRUST_PROXY 설정 값이 없으면 프록시를 믿지 않는다",
+        "status": "passed"
+      },
+      {
+        "name": "TRUST_PROXY 설정 빈 값과 false 도 믿지 않음으로 본다",
+        "status": "passed"
+      },
+      {
+        "name": "TRUST_PROXY 설정 true 는 거부한다",
+        "status": "passed"
+      },
+      {
+        "name": "TRUST_PROXY 설정 홉 수는 숫자로 읽는다",
+        "status": "passed"
+      },
+      {
+        "name": "TRUST_PROXY 설정 대역 목록은 그대로 전달한다",
+        "status": "passed"
+      },
+      {
+        "name": "요청자 주소 신뢰 설정이 없으면 전달된 헤더를 무시한다",
+        "status": "passed"
+      },
+      {
+        "name": "요청자 주소 IPv6 로 감싼 IPv4 표기를 벗긴다",
+        "status": "passed"
+      },
+      {
+        "name": "요청자 주소 주소를 알 수 없으면 unknown 으로 모은다",
+        "status": "passed"
+      }
+    ]
+  },
+  "failedStage": "unsupported-checksum",
+  "serverExitCode": 0,
+  "serverStopped": true,
+  "runtimeDirectory": "C:\\Users\\82102\\AppData\\Local\\Temp\\drill-125ec6351d3deb51"
+}

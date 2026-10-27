@@ -33,6 +33,7 @@ const result = {
     'infra/security/tests/phase2.test.ts', 'infra/security/tests/frontend-config.test.ts', 'infra/security/tests/production-auth.test.ts',
     'infra/security/tests/upload-processing.test.ts', 'backend/src/lib/imageProcessing.ts',
     'backend/src/lib/objectStorage.ts', 'backend/src/routes/images.ts',
+    'backend/src/routes/chatRooms.ts',
   ].map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])),
   build: { exitCode: build.status, success: build.status === 0 },
   tests: {

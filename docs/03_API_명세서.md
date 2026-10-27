@@ -896,8 +896,11 @@ AI·흐림 변환 진행 상태만 확인한다. 프로필 등록 화면이 완�
 - `partner`: `RevealedProfile`. 원본 사진 임시 URL(60초)이 포함된다.
 - 오류: `UNAUTHORIZED` 401, `CHAT_ROOM_NOT_FOUND` 404, `NOT_ROOM_MEMBER` 403
 - 특별 규칙:
-  - **수락된 방의 두 참여자만** 호출할 수 있다. 제3자와 관리자는 `NOT_ROOM_MEMBER` 또는 `FORBIDDEN`으로 거부한다.
+  - **수락된 방의 두 참여자만** 호출할 수 있다. 방 참여자가 아닌 제3자·관리자는 `NOT_ROOM_MEMBER` 또는 `FORBIDDEN`으로 거부한다. 관리자 역할 자체는 원본 열람 권한을 주지 않는다.
+  - 연결된 요청의 `ACCEPTED` 상태를 확인한다. 수락되지 않은 요청에 연결된 방은 `CHAT_ROOM_NOT_FOUND` 404이며 원본을 발급하지 않는다.
+  - 상대의 `ORIGINAL_PRIVATE`·`DONE` 이미지만 최대 3개 발급하며 URL은 최대 60초다. 별도 object key 필드는 반환하지 않는다. 저장소 미설정 또는 원본 없음은 빈 배열이다.
   - 차단·정지·탈퇴가 발생하면 `partner.originalImages`를 빈 배열로 반환하고 `canSendMessage`를 `false`로 내린다. 상세 프로필 텍스트 노출 범위는 보안 담당과 합의가 필요하다.
+  - `CHAT_RESTRICTED`는 메시지 전송 제한이며 기존 수락 관계의 사진 열람 자체를 취소하지 않는다. 새 URL은 매 요청 현재 계정·차단 상태로 판정하며, 이미 발급한 URL은 최대 60초 만료까지 유효할 수 있다.
   - 응답에 `Cache-Control: no-store`를 붙인다.
 - 반복 호출: 멱등. 호출마다 새 임시 URL이 발급된다.
 
