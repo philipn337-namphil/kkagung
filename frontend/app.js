@@ -145,13 +145,27 @@ function card(card) {
 function cardDetail() { return layout('<section class="page"><a class="back" href="#/home">← 추천으로 돌아가기</a><div id="card-detail" class="loading">불러오는 중…</div></section>', 'home'); }
 /** 사진 한 자리. 비어 있으면 올리는 자리, 차 있으면 공개 사진과 상태를 보여준다. */
 function photoSlot(image, slot) {
-  if (!image) return `<article class="person-card"><div class="person-image"><span class="placeholder-icon">＋</span></div><div class="person-info"><h2>${slot}번 자리</h2><p>비어 있습니다.</p><label class="outline-button">사진 올리기<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${slot}" hidden></label></div></article>`;
+  // 비어 있는 자리는 그 자체가 업로드 버튼이다. 눌러도 되고 끌어다 놓아도 된다.
+  if (!image) return `<label class="photo-slot is-empty" data-drop="${slot}">`
+    + `<input type="file" accept="image/jpeg,image/png,image/webp" data-upload="${slot}">`
+    + `<span class="photo-slot-plus" aria-hidden="true">+</span>`
+    + `<span class="photo-slot-title">${slot}번 자리</span>`
+    + `<span class="photo-slot-hint">누르거나 사진을 끌어다 놓으세요</span></label>`;
+
   // 미리보기는 상대가 보는 그 사진이어야 한다. 원본을 띄우면 무엇이 공개되는지 알 수 없다.
-  const preview = image.publicUrl ? `<img src="${escapeHtml(image.publicUrl)}" alt="${slot}번 자리 공개 사진" data-preview="${slot}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'placeholder-icon',textContent:'✦'}))">` : '<span class="placeholder-icon">✦</span>';
+  const preview = image.publicUrl
+    ? `<img src="${escapeHtml(image.publicUrl)}" alt="${slot}번 자리 공개 사진" data-preview="${slot}">`
+    : `<span class="photo-slot-plus" aria-hidden="true">✦</span>`;
   const label = image.publicType === 'AI_PUBLIC' ? 'AI 사진 공개 중' : '흐림 사진 공개 중';
   const ai = { DONE: 'AI 변환 완료', FAILED: 'AI 변환 실패' }[image.generationStatus] || 'AI 변환 준비 중';
-  const original = image.publicUrl ? `<button class="small-button" data-original="${slot}">원본 확인</button>` : '';
-  return `<article class="person-card"><div class="person-image">${preview}<span class="image-label">${escapeHtml(label)}</span></div><div class="person-info"><h2>${slot}번 자리</h2><p>${escapeHtml(ai)}<br>${escapeHtml(displayDate(image.uploadedAt))}</p><div class="card-actions">${original}<button class="small-button" data-delete="${escapeHtml(image.imageId)}">삭제</button></div></div></article>`;
+  const original = image.publicUrl ? `<button type="button" class="photo-action" data-original="${slot}">원본 확인</button>` : '';
+  return `<article class="photo-slot is-filled">${preview}`
+    + `<span class="photo-chip">${escapeHtml(label)}</span>`
+    + `<div class="photo-slot-foot">`
+    + `<div class="photo-slot-meta"><b>${slot}번 자리</b><span>${escapeHtml(ai)}</span></div>`
+    + `<div class="photo-slot-actions">${original}`
+    + `<button type="button" class="photo-action danger" data-delete="${escapeHtml(image.imageId)}">삭제</button>`
+    + `</div></div></article>`;
 }
 
 function inbox() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">INBOX</p><h1>받은 관심</h1></div><div class="tabs"><button data-tab="hearts" class="tab active">받은 하트</button><button data-tab="requests" class="tab">받은 채팅 요청</button></div></div><div id="inbox-list"><div class="loading">목록을 불러오는 중이에요…</div></div></section>`, 'inbox'); }
@@ -305,18 +319,37 @@ function bindPhotoSlots() {
   const errorSlot = document.querySelector('#photo-error');
   const report = message => { if (errorSlot) errorSlot.textContent = message; };
 
-  document.querySelectorAll('[data-upload]').forEach(input => input.onchange = async () => {
-    const file = input.files?.[0];
+  const send = async (file, slot, box) => {
     if (!file) return;
     report('');
-    input.disabled = true;
-    try { await api.uploadImage(file, input.dataset.upload); showNotice('사진을 올렸어요.'); await loadImages(); }
-    catch (error) { report(error.message); input.disabled = false; input.value = ''; }
+    box?.classList.add('is-busy');
+    try { await api.uploadImage(file, slot); showNotice('사진을 올렸어요.'); await loadImages(); }
+    catch (error) { report(error.message); box?.classList.remove('is-busy', 'is-over'); }
+  };
+
+  document.querySelectorAll('[data-upload]').forEach(input => {
+    input.onchange = () => send(input.files?.[0], input.dataset.upload, input.closest('.photo-slot'));
+  });
+
+  // 끌어다 놓기. label 위로 파일을 가져오면 테두리가 살아난다.
+  document.querySelectorAll('[data-drop]').forEach(box => {
+    const stop = event => { event.preventDefault(); event.stopPropagation(); };
+    box.ondragover = event => { stop(event); box.classList.add('is-over'); };
+    box.ondragleave = event => { stop(event); box.classList.remove('is-over'); };
+    box.ondrop = event => {
+      stop(event);
+      box.classList.remove('is-over');
+      const file = event.dataTransfer?.files?.[0];
+      // 이미지가 아닌 것을 떨어뜨리면 서버까지 가지 않고 여기서 끊는다.
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { report('이미지 파일만 올릴 수 있습니다.'); return; }
+      send(file, box.dataset.drop, box);
+    };
   });
 
   // 지우면 원본·흐림·AI 가 함께 사라진다. 되돌릴 수 없으니 한 번 더 누르게 한다.
   document.querySelectorAll('[data-delete]').forEach(button => button.onclick = async () => {
-    if (button.dataset.sure !== 'yes') { button.dataset.sure = 'yes'; button.textContent = '정말 지울까요?'; return; }
+    if (button.dataset.sure !== 'yes') { button.dataset.sure = 'yes'; button.textContent = '한 번 더'; button.classList.add('confirming'); return; }
     report('');
     button.disabled = true;
     try { await api.deleteImage(button.dataset.delete); showNotice('사진을 지웠어요.'); await loadImages(); }
