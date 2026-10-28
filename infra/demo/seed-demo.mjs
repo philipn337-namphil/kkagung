@@ -39,6 +39,7 @@ const loadStorage = async () => {
 
 const bcrypt = (await dep("bcryptjs", "index.js")).default;
 const sharp = (await dep("sharp", "dist/index.mjs")).default;
+const { readFile } = await import("node:fs/promises");
 const { PrismaClient } = await dep("@prisma/client", "index.js");
 const { privateBucket, publicBucket, putObject, storageReady } = await loadStorage();
 
@@ -83,9 +84,50 @@ const REGION_SCOPE = ["SEOUL_MAPO", "SEOUL_JONGNO", "SEOUL_GANGNAM", "SEOUL_YONG
  * 사람마다 다른 아바타. 사람 사진이 아니라 색이 다른 도형이다.
  * 흐림본은 같은 그림을 뭉갠 것이라, 수락 전후 차이가 한눈에 보인다.
  */
-const avatar = (index, blur) => {
-  const hue = (index * 37 + 15) % 360;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
+// 사진은 infra/demo/photos/<id>.jpg 를 쓴다.
+// 자기 사진이 없는 사람은 같은 성별의 사진을 돌려 쓰되 크롭과 좌우를 달리한다.
+//
+// 색을 돌려 다른 사람처럼 보이게 해 보았지만 안 됐다. 크게 돌리면 얼굴이 초록·보라가 되고,
+// 자연스러운 범위면 블러 뒤에도 같은 사람으로 보인다. 블러는 얼굴을 지우지만 실루엣과
+// 구도는 남기기 때문이다. 그래서 색은 건드리지 않고 구도만 바꾼다.
+//
+// 사진을 더 넣을수록 겹침이 줄어든다. 성별당 네 장쯤이면 추천 카드 세 장에서 같은 사람이
+// 나올 일이 거의 없다.
+const PHOTO_DIR = new URL("./photos/", import.meta.url);
+const EXTS = ["jpg", "jpeg", "png", "webp"];
+
+const readPhoto = async (id) => {
+  for (const ext of EXTS) {
+    try { return await readFile(new URL(`${id}.${ext}`, PHOTO_DIR)); } catch { /* 다음 확장자 */ }
+  }
+  return null;
+};
+
+// 성별별로 가진 사진을 한 번만 모은다.
+let pool = null;
+const photoPool = async (people) => {
+  if (pool) return pool;
+  pool = { MALE: [], FEMALE: [] };
+  for (const person of people) {
+    const buf = await readPhoto(person.id);
+    if (buf) pool[person.gender]?.push(buf);
+  }
+  return pool;
+};
+
+// 같은 사진을 쓰더라도 사람마다 다르게 잘라 쓴다. 같은 사람은 몇 번 돌려도 같은 결과다.
+const reframe = (image, seed) => {
+  const zoom = 1 + ((seed * 13) % 28) / 100;          // 1.00 ~ 1.27
+  const side = Math.round(1024 / zoom);
+  const left = Math.round((1024 - side) * (((seed * 7) % 11) / 10));
+  const top = Math.round((1024 - side) * (((seed * 5) % 7) / 20));  // 얼굴이 위쪽이라 조금만
+  const cropped = image.extract({ left, top, width: side, height: side }).resize(1024, 1024);
+  return seed % 2 === 0 ? cropped.flop() : cropped;
+};
+
+const drawn = (seed) => {
+  const hue = (seed * 37 + 15) % 360;
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
     + `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">`
     + `<stop offset="0" stop-color="hsl(${hue} 62% 82%)"/>`
     + `<stop offset="1" stop-color="hsl(${(hue + 28) % 360} 55% 68%)"/>`
@@ -93,8 +135,22 @@ const avatar = (index, blur) => {
     + `<rect width="1024" height="1024" fill="url(#g)"/>`
     + `<circle cx="512" cy="408" r="176" fill="hsl(${hue} 42% 46%)"/>`
     + `<rect x="236" y="676" width="552" height="360" rx="176" fill="hsl(${hue} 42% 46%)"/>`
-    + `</svg>`;
-  const image = sharp(Buffer.from(svg));
+    + `</svg>`);
+};
+
+const portrait = async (person, index, people) => {
+  const own = await readPhoto(person.id);
+  if (own) return sharp(own).resize(1024, 1024, { fit: "cover" });
+
+  const shelf = (await photoPool(people))[person.gender] ?? [];
+  if (shelf.length === 0) return sharp(drawn(index));   // 사진이 하나도 없으면 그려서 쓴다
+
+  const picked = shelf[index % shelf.length];
+  return reframe(sharp(picked).resize(1024, 1024, { fit: "cover" }), index + 1);
+};
+
+const renderPhoto = async (person, index, people, blur) => {
+  const image = await portrait(person, index, people);
   return (blur ? image.blur(26) : image).webp({ quality: 82 }).toBuffer();
 };
 
@@ -157,8 +213,8 @@ const seed = async () => {
     const originalKey = key("originals", "webp");
     const blurredKey = key("profiles/blur", "webp");
     if (storageReady()) {
-      await putObject(privateBucket(), originalKey, await avatar(index, false), "image/webp");
-      await putObject(publicBucket(), blurredKey, await avatar(index, true), "image/webp");
+      await putObject(privateBucket(), originalKey, await renderPhoto(person, index, people, false), "image/webp");
+      await putObject(publicBucket(), blurredKey, await renderPhoto(person, index, people, true), "image/webp");
     }
     const common = { userId: user.id, slot: 1, byteSize: 40000, width: 1024, height: 1024, processedAt: now, failedReasonCode: null };
     await prisma.profileImage.createMany({
@@ -171,38 +227,106 @@ const seed = async () => {
   }
 
   // 시연 시작 시점에 받은 알림과 채팅방이 비어 있으면 보여줄 것이 없다. 미리 만들어 둔다.
+  // 모두 "방금" 으로 찍으면 목록의 시각이 전부 같아 한눈에 가짜로 보인다. 과거로 흩어 둔다.
   const presenter = ids.get("narae");
   const serviceDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const ago = (minutes) => new Date(now.getTime() - minutes * 60_000);
 
-  for (const who of ["jiwon", "seoyeon", "yuna"]) {
-    await prisma.heart.create({ data: { senderId: ids.get(who), receiverId: presenter } });
-  }
-
-  for (const [who, message] of [["haeun", "안녕하세요! 프로필 보고 연락드려요. 전시 좋아하신다니 반가워요."], ["dain", "같은 동네네요. 커피 한 잔 어떠세요?"]]) {
-    await prisma.chatRequest.create({
-      data: { senderId: ids.get(who), receiverId: presenter, message, sourceType: "RECOMMENDATION", serviceDate },
+  // 오래된 것부터 넣는다. 목록이 id 역순으로도 정렬되므로 생성 순서가 시간 순서와 같아야 한다.
+  const hearts = [
+    ["chaewon", 3180], ["nayeon", 2020], ["arin", 1460],
+    ["yuna", 620], ["seoyeon", 240], ["jiwon", 48],
+  ];
+  for (const [who, minutes] of hearts) {
+    await prisma.heart.create({
+      data: { senderId: ids.get(who), receiverId: presenter, createdAt: ago(minutes) },
     });
   }
 
-  // 수락된 방 하나. 여기서 상대 원본 사진이 공개되는 것을 보여준다.
-  const accepted = await prisma.chatRequest.create({
+  // 발표자가 보낸 하트. 보낸 쪽 목록도 비어 있지 않게 한다.
+  for (const [who, minutes] of [["minseo", 2600], ["ssol", 300]]) {
+    await prisma.heart.create({
+      data: { senderId: presenter, receiverId: ids.get(who), createdAt: ago(minutes) },
+    });
+  }
+
+  const pending = [
+    ["ssol", "프로필 사진 분위기가 좋아서요. 혹시 전시 자주 보세요?", 1870],
+    ["chaewon", "같은 마포구네요! 반가워요. 주말에 커피 한 잔 어때요?", 880],
+    ["haeun", "안녕하세요! 프로필 보고 연락드려요. 전시 좋아하신다니 반가워요.", 310],
+    ["dain", "같은 동네네요. 커피 한 잔 어떠세요?", 35],
+  ];
+  for (const [who, message, minutes] of pending) {
+    await prisma.chatRequest.create({
+      data: {
+        senderId: ids.get(who), receiverId: presenter, message,
+        sourceType: "RECOMMENDATION", serviceDate, createdAt: ago(minutes),
+      },
+    });
+  }
+
+  // 거절당한 요청 하나. 보낸 쪽 목록에 남는다.
+  // 받는 쪽에 두면 "받은 채팅 요청" 탭에 이미 처리된 건이 섞여 시연이 헷갈린다.
+  // 그 목록은 IGNORED 만 숨기고 REJECTED·ACCEPTED 는 그대로 보여준다(chatRequests.ts).
+  await prisma.chatRequest.create({
     data: {
-      senderId: presenter, receiverId: ids.get("minseo"),
-      message: "안녕하세요, 책 좋아하신다고 해서요. 이야기 나눠보고 싶어요.",
-      status: "ACCEPTED", sourceType: "RECOMMENDATION", serviceDate, respondedAt: now,
+      senderId: presenter, receiverId: ids.get("nayeon"),
+      message: "안녕하세요, 같은 동네라 반가워서 연락드려요.",
+      status: "REJECTED", sourceType: "RECOMMENDATION", serviceDate,
+      createdAt: ago(4300), respondedAt: ago(4210),
     },
   });
-  const room = await prisma.chatRoom.create({ data: { chatRequestId: accepted.id } });
-  await prisma.chatRoomMember.createMany({
-    data: [{ roomId: room.id, userId: presenter }, { roomId: room.id, userId: ids.get("minseo") }],
-  });
-  for (const [who, body] of [
-    ["narae", "안녕하세요! 수락해 주셔서 고마워요."],
-    ["minseo", "안녕하세요 :) 프로필에 성수동 적어두신 거 봤어요."],
-    ["narae", "자주 가요. 요즘 괜찮은 데 한 곳 알아뒀는데 같이 가보실래요?"],
-    ["minseo", "좋아요. 이번 주말은 어떠세요?"],
-  ]) {
-    await prisma.chatMessage.create({ data: { roomId: room.id, senderId: ids.get(who), body } });
+
+  // 수락된 방. 여기서 상대 원본 사진이 공개되는 것을 보여준다.
+  const rooms = [
+    {
+      partner: "minseo", from: "narae", openedAt: 2900,
+      message: "안녕하세요, 책 좋아하신다고 해서요. 이야기 나눠보고 싶어요.",
+      talk: [
+        ["narae", "안녕하세요! 수락해 주셔서 고마워요.", 2860],
+        ["minseo", "안녕하세요 :) 프로필에 성수동 적어두신 거 봤어요.", 2840],
+        ["narae", "자주 가요. 요즘 괜찮은 데 한 곳 알아뒀는데 같이 가보실래요?", 2790],
+        ["minseo", "좋아요. 이번 주말은 어떠세요?", 2730],
+        ["narae", "토요일 오후면 저는 괜찮아요.", 1400],
+        ["minseo", "그럼 토요일로 해요. 2시쯤 어때요?", 1320],
+        ["narae", "좋습니다. 장소는 제가 정해서 알려드릴게요.", 1180],
+        ["minseo", "네 기대할게요!", 1120],
+      ],
+    },
+    {
+      partner: "jiwon", from: "narae", openedAt: 760,
+      message: "사진 분위기가 좋아서 연락드렸어요. 전시 좋아하세요?",
+      talk: [
+        ["jiwon", "안녕하세요! 받아주셔서 감사해요.", 740],
+        ["narae", "안녕하세요. 저도 전시 자주 봐요.", 700],
+        ["jiwon", "요즘 뭐 보셨어요?", 660],
+        ["narae", "지난주에 리움 다녀왔어요. 생각보다 사람이 많더라고요.", 150],
+        ["jiwon", "아 저도 가보려고 했는데! 평일이 낫겠네요.", 95],
+      ],
+    },
+  ];
+
+  for (const room of rooms) {
+    const mine = room.from === "narae";
+    const accepted = await prisma.chatRequest.create({
+      data: {
+        senderId: mine ? presenter : ids.get(room.from),
+        receiverId: mine ? ids.get(room.partner) : presenter,
+        message: room.message, status: "ACCEPTED", sourceType: "RECOMMENDATION",
+        serviceDate, createdAt: ago(room.openedAt + 40), respondedAt: ago(room.openedAt),
+      },
+    });
+    const created = await prisma.chatRoom.create({
+      data: { chatRequestId: accepted.id, createdAt: ago(room.openedAt) },
+    });
+    await prisma.chatRoomMember.createMany({
+      data: [{ roomId: created.id, userId: presenter }, { roomId: created.id, userId: ids.get(room.partner) }],
+    });
+    for (const [who, body, minutes] of room.talk) {
+      await prisma.chatMessage.create({
+        data: { roomId: created.id, senderId: ids.get(who), body, createdAt: ago(minutes) },
+      });
+    }
   }
 
   console.log(`\n시연용 계정 ${people.length}개 생성`);
@@ -210,7 +334,11 @@ const seed = async () => {
   console.log(`  관리자   ${ADMIN}`);
   console.log(`  비밀번호 ${process.env.DEMO_PASSWORD ? "(DEMO_PASSWORD 로 지정한 값)" : "kkagung123!"}`);
   console.log(`\n발표자 계정에 미리 넣어 둔 것`);
-  console.log(`  받은 하트 3개 · 받은 채팅 요청 2개 · 수락된 채팅방 1개(메시지 4개)`);
+  console.log(`  받은 하트 ${hearts.length}개 · 보낸 하트 2개`);
+  console.log(`  대기 중인 채팅 요청 ${pending.length}개 (받은 목록에는 이 넷만 뜬다)`);
+  console.log(`  보낸 요청 ${rooms.length + 1}개 — 수락 ${rooms.length} · 거절당함 1`);
+  console.log(`  수락된 채팅방 ${rooms.length}개(메시지 ${rooms.reduce((n, r) => n + r.talk.length, 0)}개)`);
+  console.log(`  시각은 지금부터 3일 전까지 흩어 두었다.`);
   console.log(`  오늘의 운세는 시연 중에 직접 연다.`);
 };
 
