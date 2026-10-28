@@ -449,7 +449,7 @@ Launch Configuration  kkagung-lc
                         Init Script  kkagung-app-init
 
 Auto Scaling Group    kkagung-asg
-                        최소 1 / 기대 2 / 최대 4
+                        최소 1 / 기대 1 / 최대 4
                         Target Group  kkagung-tg-api + kkagung-tg-web
                         헬스체크       로드밸런서 · 보류 300초 · 상세 모니터링 Y
 
@@ -459,6 +459,14 @@ Auto Scaling Group    kkagung-asg
 Cloud Insight         kkagung-asg-cpu-high   avg_cpu_used_rto >= 60  AVG 5분   → scale-out
                       kkagung-asg-cpu-low    avg_cpu_used_rto <= 30  AVG 10분  → scale-in
 ```
+
+기대 용량은 **1** 로 둔다. 평소 한 대로 충분하고, 몰리면 CPU 알람이 올린다.
+5절 측정 때 2·4 로 올려 재고 다시 1 로 내렸다.
+
+**1대라는 것은 서버를 교체하면 끊긴다는 뜻이다.** ASG 가 새 서버를 만들고 Target Group 에
+붙기까지 3분쯤 걸리는데 그동안 받아 줄 서버가 없다. Init Script 를 고쳐 반영해야 할 때는
+**여유 있는 시각에** 한다. 끊기면 안 되는 자리라면 교체 전에 기대 용량을 2 로 올려
+한 대씩 굴리고, 끝나고 1 로 내린다.
 
 ASG 는 Target Group 을 여러 개 받는다. API(8080)와 프론트(5173)를 한 그룹이 함께 채운다.
 
