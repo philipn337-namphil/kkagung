@@ -280,7 +280,7 @@ describe("목록", () => {
     expect(Object.keys(item).sort()).toEqual(["createdAt", "message", "requestId", "respondedAt", "sender", "status"]);
     expect(item.sender.userId).toBe(senderId.toString());
     expect(Object.keys(item.sender).sort()).toEqual([
-      "age", "animalFace", "badges", "displayName", "gender", "heightCm",
+      "age", "animalFace", "badges", "gender", "heightCm",
       "jobCategory", "mbti", "publicImage", "recommendReason", "regionLabel", "userId",
     ]);
     for (const forbidden of ["email", "@kkagung.local", "birthDate", "objectKey", "object_key", "password", "ORIGINAL_PRIVATE", "intro"]) {

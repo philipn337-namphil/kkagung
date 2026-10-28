@@ -75,7 +75,8 @@ chatRoomsRouter.get("/", requireAuth, async (req, res, next) => {
     const hasMore = rows.length > limit;
 
     const serviceDate = serviceDateOf(new Date());
-    const cards = await buildPublicCards(userId, serviceDate, page.map((row) => ({ targetUserId: row.partnerId, reasonCode: "CHAT_PARTNER" })));
+    // 수락된 방이므로 이름을 함께 준다. 수락 전 목록에는 이름이 나가지 않는다.
+    const cards = await buildPublicCards(userId, serviceDate, page.map((row) => ({ targetUserId: row.partnerId, reasonCode: "CHAT_PARTNER" })), { withName: true });
     const cardByUserId = new Map(cards.map((card) => [card.userId, card]));
 
     const items = [];

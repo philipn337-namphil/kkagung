@@ -182,7 +182,7 @@ describe("응답 필드", () => {
     const { text, body } = await openFor("demo@kkagung.local");
 
     expect(Object.keys(body.data.cards[0]).sort()).toEqual([
-      "age", "animalFace", "badges", "displayName", "gender", "heightCm",
+      "age", "animalFace", "badges", "gender", "heightCm",
       "jobCategory", "mbti", "publicImage", "recommendReason", "regionLabel", "userId",
     ]);
     for (const forbidden of ["email", "@kkagung.local", "birthDate", "objectKey", "object_key", "password", "ORIGINAL_PRIVATE", "intro", "celebrityLookalike"]) {

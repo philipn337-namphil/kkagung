@@ -29,7 +29,8 @@ const reasonText = (code: string) => REASON[code as ReasonCode] ?? REASON.PREFER
 
 export type PublicCard = {
   userId: string;
-  displayName: string;
+  /** 수락된 관계에서만 채운다. 수락 전 카드에는 이 키 자체가 없다. */
+  displayName?: string;
   age: number;
   gender: string;
   regionLabel: string;
@@ -185,7 +186,16 @@ const publicImageUrl = (chosen: { imageType: string; objectKey: string }) => {
 };
 
 // 하트·채팅 목록도 같은 공개 카드 모양을 쓴다. 변환을 한 곳에만 두기 위해 내보낸다.
-export const buildPublicCards = async (viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[]) => {
+/**
+ * 공개 카드에는 이름을 넣지 않는다. 수락 전에는 상대가 누구인지 알 수 없어야 한다.
+ * 카드에서 사람을 가리키는 것은 지역과 동물상이다.
+ *
+ * withName 은 이미 수락된 관계에만 쓴다. 채팅방 목록이 그렇다. 그 밖에서는 켜지 않는다.
+ */
+export const buildPublicCards = async (
+  viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[],
+  { withName = false }: { withName?: boolean } = {},
+) => {
   if (items.length === 0) return [];
   const excluded = new Set<string>();
   const blocks = await prisma.block.findMany({
@@ -217,7 +227,7 @@ export const buildPublicCards = async (viewerId: bigint, serviceDate: string, it
     if (chosenImage === null) continue;
     cards.push({
       userId: target.id.toString(),
-      displayName: target.profile.displayName,
+      ...(withName ? { displayName: target.profile.displayName } : {}),
       age: ageOn(target.profile.birthDate, serviceDate),
       gender: target.profile.gender,
       regionLabel: target.profile.regionCode,
