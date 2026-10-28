@@ -66,10 +66,13 @@ const accounts: SeedAccount[] = [
 ];
 
 // object key 에는 이름·이메일·원래 파일명을 넣지 않고 가짜 식별자만 쓴다.
+// AI 는 PENDING 으로 둔다(D-02). 실제 사용자가 올렸을 때와 같은 상태다.
+// 시드만 DONE 으로 두면 구현하지 않은 AI 변환이 동작하는 것처럼 보이고, 카드에
+// 흐림본 대신 선명한 사진이 나가 "수락 전에는 흐림만 공개" 라는 규칙과 어긋난다.
 const imageRows = (seedNo: number) => [
-  { imageType: "ORIGINAL_PRIVATE" as const, objectKey: `originals/seed-${seedNo}-1.webp` },
-  { imageType: "AI_PUBLIC" as const, objectKey: `profiles/ai/seed-${seedNo}-1.webp` },
-  { imageType: "BLURRED_PUBLIC" as const, objectKey: `profiles/blurred/seed-${seedNo}-1.webp` },
+  { imageType: "ORIGINAL_PRIVATE" as const, objectKey: `originals/seed-${seedNo}-1.webp`, status: "DONE" as const },
+  { imageType: "BLURRED_PUBLIC" as const, objectKey: `profiles/blurred/seed-${seedNo}-1.webp`, status: "DONE" as const },
+  { imageType: "AI_PUBLIC" as const, objectKey: "", status: "PENDING" as const },
 ];
 
 /**
@@ -150,14 +153,16 @@ async function main() {
     });
 
     for (const row of imageRows(p.seedNo)) {
-      await seedImageObject(row.imageType, row.objectKey, p.seedNo);
+      // 올릴 객체가 없는 행(AI PENDING)은 건너뛴다.
+      if (row.objectKey !== "") await seedImageObject(row.imageType, row.objectKey, p.seedNo);
+      const pending = row.status === "PENDING";
       const imageData = {
         objectKey: row.objectKey,
-        generationStatus: "DONE" as const,
-        byteSize: 120000,
-        width: 1024,
-        height: 1024,
-        processedAt: now,
+        generationStatus: row.status,
+        byteSize: pending ? 0 : 120000,
+        width: pending ? 0 : 1024,
+        height: pending ? 0 : 1024,
+        processedAt: pending ? null : now,
         failedReasonCode: null,
       };
       await prisma.profileImage.upsert({

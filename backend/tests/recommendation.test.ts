@@ -250,7 +250,8 @@ describe("응답 필드", () => {
     const seedImages = { where: { user: { email: { endsWith: "@kkagung.local" } } } };
     const total = await db.profileImage.count(seedImages);
     expect(total).toBe(24);
-    expect(await db.profileImage.count({ where: { ...seedImages.where, generationStatus: "DONE" } })).toBe(total);
+    // AI 는 PENDING 으로 시드된다(D-02). 원본·흐림본만 DONE 이다.
+    expect(await db.profileImage.count({ where: { ...seedImages.where, generationStatus: "DONE" } })).toBe(16);
   });
 
   it("공개 이미지 기준 주소가 설정되면 공개 버킷 경로로 URL 을 만든다", async () => {
