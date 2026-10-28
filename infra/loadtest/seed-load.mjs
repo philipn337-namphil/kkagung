@@ -10,7 +10,13 @@
  *
  * DATABASE_URL 이 필요하다. 운영 DB 를 가리키면 실행을 거부한다.
  */
-import { PrismaClient } from "../../backend/node_modules/@prisma/client/index.js";
+// 저장소에서 바로 돌릴 때는 backend/node_modules 를, 앱 이미지 안에서 돌릴 때는
+// 그 옆의 node_modules 를 쓴다. NCP 에서는 Cloud DB 에 닿는 곳이 앱 서버뿐이다.
+const dep = async (name, entry) => {
+  try { return await import(name); }
+  catch { return await import(new URL(`../../backend/node_modules/${name}/${entry}`, import.meta.url).href); }
+};
+const { PrismaClient } = await dep("@prisma/client", "index.js");
 
 const LOAD_DOMAIN = "@kkagung.load";
 const BATCH = 500;

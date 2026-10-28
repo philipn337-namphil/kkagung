@@ -429,15 +429,60 @@ Init Script 는 콘솔에서 수정할 수 있다(목록에 수정 버튼이 있
 
 ## 5. 부하 테스트
 
-로컬에서 쓴 도구를 그대로 쓴다. `--base` 로 서비스 주소를 준다.
+도구는 `infra/loadtest/` 에 있다. **DB 를 쓰는 일과 HTTP 를 때리는 일을 나눠서 돌린다.**
+Cloud DB 는 비공인 서브넷에 있고 계정 호스트가 앱 서브넷 대역으로 묶여 있어,
+작업자 PC 에서는 DB 에 붙을 수 없다(2단계 참고). 반대로 측정은 LB 바깥에서 해야
+실제 경로를 재는 것이 된다. 앱 서버에서 때리면 애플리케이션과 CPU 를 나눠 쓰게 된다.
+
+### 1단계 — 앱 서버 안에서 (DB 작업)
+
+마이그레이션과 같은 자리다. 징검다리를 거쳐 앱 서버로 들어간 뒤, 앱 이미지에
+스크립트를 넣어 돌린다. 이미지에는 `loadtest/` 가 들어 있지 않으므로 올려서 붙인다.
 
 ```bash
-node infra/loadtest/seed-load.mjs --count 2000
-node infra/loadtest/run-load.mjs --base https://<서비스 도메인> --users 500 --concurrency 50 --reset
-node infra/loadtest/seed-load.mjs --clean
+# 부하용 계정 생성. @kkagung.load 도메인만 쓰므로 기능 시드와 섞이지 않는다.
+docker run --rm -v "$PWD/loadtest:/app/loadtest" -e DATABASE_URL="$DATABASE_URL" -e ALLOW_REMOTE_LOAD_SEED=true \
+  <이미지> node loadtest/seed-load.mjs --count 2000
+
+# 당일 데이터를 비우고 토큰을 미리 발급해 파일로 뽑는다
+docker run --rm -v "$PWD/loadtest:/app/loadtest" -e DATABASE_URL="$DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" \
+  -e ALLOW_REMOTE_LOAD_SEED=true <이미지> node loadtest/run-load.mjs --export loadtest/tokens.json --users 500 --reset
 ```
 
-원격 DB 에 시드하려면 `ALLOW_REMOTE_LOAD_SEED=true` 가 필요하다. 실수로 운영 DB 에 넣지 않도록 둔 장치다.
+`--reset` 이 하는 일은 두 가지다. 부하용 계정의 운세·추천·새로고침권을 지우고,
+**선착순 재고를 남은 티켓 수에 맞춰 다시 센다.** 재고를 되돌리지 않으면 두 번째
+실행부터 바닥난 상태로 시작해 "설정한 개수만 발급됐는가" 를 확인할 수 없다.
+
+### 2단계 — 작업자 PC 에서 (측정)
+
+뽑은 파일만 가져오면 된다. **DB 접속도 `JWT_SECRET` 도 필요 없다.**
+
+```bash
+node infra/loadtest/run-load.mjs --base http://<LB 주소> --tokens-file tokens.json --concurrency 50
+```
+
+토큰 수명은 1시간이다. 파일에 유효한 토큰 500개가 들어 있으므로 쓰고 지운다.
+저장소에는 커밋하지 않는다(`.gitignore` 에 넣어 두었다).
+
+### 3단계 — 정리
+
+```bash
+docker run --rm -v "$PWD/loadtest:/app/loadtest" -e DATABASE_URL="$DATABASE_URL" -e ALLOW_REMOTE_LOAD_SEED=true \
+  <이미지> node loadtest/seed-load.mjs --clean
+```
+
+`ALLOW_REMOTE_LOAD_SEED=true` 는 원격 DB 에 쓰기 위한 명시적 허용이다.
+실수로 운영 DB 를 상대로 돌리지 않도록 둔 장치이고, 두 스크립트 모두 같은 기준을 쓴다.
+
+### 429 가 섞이면 측정이 아니다
+
+속도 제한이 IP 당 60초에 90회다. 스크립트는 사용자마다 다른 `X-Forwarded-For` 를
+보내 이를 피하는데, **서버에 `TRUST_PROXY` 가 없으면 그 헤더가 무시되어 전부 한 IP 로
+집계된다.** 그러면 대부분이 429 로 떨어지고 숫자는 의미가 없어진다.
+
+LB 를 거칠 때는 LB 가 이 헤더를 **덧붙이는지 덮어쓰는지**도 봐야 한다. 덮어쓰면 같은
+일이 생긴다. 스크립트가 응답 코드에 429 가 섞이면 끝에 그 사실을 알려 준다.
+첫 측정에서 반드시 확인한다.
 
 ### 로컬 기준값 (노트북 한 대에서 DB·API 동시 구동)
 
@@ -450,6 +495,9 @@ node infra/loadtest/seed-load.mjs --clean
 | 처리량 | 초당 25건 |
 
 NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아야 한다. 그렇지 않으면 구성 문제를 먼저 의심한다.
+
+이 값은 `TRUST_PROXY` 가 켜진 상태에서만 재현된다. 재현되지 않으면 그것부터 확인한다.
+참고로 같은 노트북에서 사용자 300명 / 동시 30 은 `daily/open` p50 502ms · 초당 82건이었다.
 
 ### 확인할 것
 
