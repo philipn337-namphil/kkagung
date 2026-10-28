@@ -435,30 +435,61 @@ Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에�
 
 ## 4. Auto Scaling 과 관측
 
-Launch Configuration 도 같은 Init Script 를 고른다. 3단계에서 값을 채워 등록해 둔 그 스크립트다.
-증설된 서버는 그 스크립트대로 이미지를 받아 뜨므로, **배포할 때 바꿔야 하는 것은 스크립트 안의
-`APP_IMAGE` 태그**다.
-
-#### 배포할 때는 스크립트를 고치지 말고 새로 만든다
-
-Init Script 는 콘솔에서 수정할 수 있다(목록에 수정 버튼이 있다). 하지만 **기존 Launch Configuration 이
-그 수정을 따라가는지는 확인되지 않았다.** LC 가 스크립트를 참조로 들고 있는지, 생성 시점에 복사해
-두는지가 화면에 드러나지 않는다.
-
-확인될 때까지는 어느 쪽이든 맞는 절차로 둔다.
+### 실제로 만든 것
 
 ```
-새 이미지 push → Init Script 를 새로 만든다(수정하지 않는다)
-              → Launch Configuration 을 새로 만든다
-              → Auto Scaling Group 이 새 LC 를 쓰게 바꾼다
+Launch Configuration  kkagung-lc
+                        서버 이미지   kkagung-app-base
+                        Init Script  kkagung-app-init
+
+Auto Scaling Group    kkagung-asg
+                        최소 1 / 기대 2 / 최대 4
+                        Target Group  kkagung-tg-api + kkagung-tg-web
+                        헬스체크       로드밸런서 · 보류 300초 · 상세 모니터링 Y
+
+정책                  scale-out  +1  쿨다운 300초
+                      scale-in   -1  쿨다운 600초
+
+Cloud Insight         kkagung-asg-cpu-high   avg_cpu_used_rto >= 60  AVG 5분   → scale-out
+                      kkagung-asg-cpu-low    avg_cpu_used_rto <= 30  AVG 10분  → scale-in
 ```
 
-4단계에서 LC 를 만들고 스크립트를 고친 뒤 실제로 증설시켜 어느 쪽으로 뜨는지 보면 답이 나온다.
-참조라면 위 절차를 "스크립트 수정 → 재기동"으로 줄일 수 있다.
+ASG 는 Target Group 을 여러 개 받는다. API(8080)와 프론트(5173)를 한 그룹이 함께 채운다.
 
-- Launch Configuration 에 위 서버 이미지를 지정하고 평시 최소 대수를 둔다
-- Cloud Insight 로 CPU·요청 수·응답 시간·오류율·서버 수를 본다
-- 8시 집중 구간에 증설하고 이후 축소한다
+증설 경로가 실제로 도는 것을 확인했다. ASG 가 서버를 만들고, Init Script 가 레지스트리에서
+이미지 두 개를 받아 컨테이너를 띄우고, Target Group 에 자동으로 붙는다. 사람 손이 들어가지 않는다.
+
+**보류 기간(health check grace period)은 300초가 맞다.** 실제로 2분 남짓 걸린다. 서버가 뜨고,
+Docker 가 레지스트리에서 두 이미지를 받고, `/health` 가 DB 연결까지 확인해야 끝난다.
+180초로 두면 아슬아슬하고, 모자라면 멀쩡한 서버를 비정상으로 보고 반납했다가 다시 만드는
+일이 반복된다.
+
+### 이미지를 바꿀 때 LC 를 다시 만들지 않아도 된다
+
+LC 가 가리키는 것은 **서버 이미지와 Init Script 둘뿐**이다. `APP_IMAGE`·`FRONTEND_IMAGE` 는
+Init Script 본문 안에 있다. 그래서 **스크립트 두 줄만 고치면 다음에 뜨는 서버부터 새 이미지를**
+**받는다.** LC 도 ASG 도 건드리지 않는다.
+
+3단계에서 "확인될 때까지는 스크립트도 LC 도 새로 만든다" 로 적어 두었던 것을 여기서 줄인다.
+LC 는 스크립트를 참조로 들고 있다. 실제로 수정한 뒤 증설시켜 확인했다.
+
+앱 이미지를 서버 이미지에 굽지 않고 기동할 때 받기로 한 결정(D-05)이 여기서 값을 한다.
+구웠다면 이미지를 바꿀 때마다 서버 이미지를 다시 만들고 LC 도 다시 만들어야 했다.
+
+```
+새 이미지 push → Init Script 의 APP_IMAGE·FRONTEND_IMAGE 수정 → 서버를 굴려 교체
+```
+
+### 서버를 굴려 교체하는 법
+
+Init Script 는 기동할 때 한 번만 돈다. 이미 떠 있는 서버는 스크립트를 고쳐도 그대로다.
+새 내용으로 바꾸려면 서버를 다시 만들어야 하는데, 서비스를 끊지 않고 할 수 있다.
+
+```
+기대 용량을 올려 새 서버를 먼저 띄운다 → Target Group 에 붙는 것을 확인 → 옛 서버를 반납
+```
+
+`TRUST_PROXY` 를 측정용으로 바꿀 때도 같은 방법을 쓴다(5절 참고).
 
 ---
 
@@ -589,6 +620,43 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 
 ---
 
+## 시연용 데이터 넣기
+
+**부하 측정을 모두 마친 뒤에 한다.** 부하용 계정 2,000개가 남아 있으면 추천 카드가
+`부하NNNN` 으로 채워져 시연용 사람들이 묻힌다.
+
+```
+5단계 측정 끝  →  seed-load.mjs --clean  →  seed-demo.mjs  →  확인
+```
+
+스크립트는 앱 이미지에 들어 있지 않다. 돌고 있는 컨테이너에 넣어 `docker exec` 로 실행한다.
+그러면 컨테이너의 `DATABASE_URL`·`OBJECT_STORAGE_*` 를 그대로 물려받는다.
+`docker run` 에 환경변수를 다시 적는 방식은 하나만 빠뜨려도 사진 없이 계정만 생기므로 쓰지 않는다.
+
+```bash
+# 앱 서버에서 (징검다리를 거쳐 들어간다)
+curl -fsSL -o seed-demo.mjs \
+  https://raw.githubusercontent.com/philipn337-namphil/kkagung/main/infra/demo/seed-demo.mjs
+docker cp seed-demo.mjs kkagung-api:/app/demo/seed-demo.mjs
+docker exec kkagung-api node demo/seed-demo.mjs
+```
+
+`/app/demo/` 가 없으면 먼저 만든다(`docker exec kkagung-api mkdir -p /app/demo`).
+같은 방법으로 부하 스크립트도 넣는다.
+
+### 넣고 나서 확인할 것
+
+`narae@kkagung.demo` / `kkagung123!` 로 로그인해서 본다. 관리자는 `unjeong@kkagung.demo` 다.
+
+| | |
+|---|---|
+| 추천 카드 | `용산구 · 사슴상 28` 처럼 **이름 없이** 나오는가 |
+| 카드 사진 | 흐림본이 보이는가 (403 이면 `OBJECT_STORAGE_*` 가 빠진 것이다) |
+| 받은 관심 | 하트 3개, 채팅 요청 2개가 있는가 |
+| 채팅방 | 이름과 **선명한 원본 사진**이 나오는가 |
+
+시드는 같은 object key 에 덮어쓰므로 다시 돌려도 중복이 생기지 않는다.
+
 ## 제출물 묶기
 
 `git archive` 로 만든다. 추적되는 파일만 들어가므로 `.env`·`node_modules`·`dist`·
@@ -628,6 +696,7 @@ unzip -l kkagung.zip | grep -E "README.md|infra/docker-compose.yml|.env.example"
 - [ ] 레지스트리 저장 버킷이 `kkagung-registry` 인가 (사진 버킷이 아니어야 한다)
 - [ ] 서버 이미지를 만들 때 쓴 임시 서버·공인 IP·서브넷·ACG 를 반납했는가
 - [ ] **부하용 계정을 지웠는가** (`seed-load.mjs --clean`). 남아 있으면 추천 카드에 `부하NNNN` 이 나온다
+- [ ] 시연용 시드를 넣고 추천 카드에 이름이 없는지·사진이 보이는지 확인했는가
 - [ ] `FRONTEND_URL` 이 브라우저가 보는 주소와 **정확히** 같은가 (CORS 는 Origin 하나만 받는다)
 - [ ] LB 경로 규칙이 `/api/*` 를 8080 으로, 나머지를 5173 으로 보내는가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
