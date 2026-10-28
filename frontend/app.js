@@ -11,6 +11,16 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '
 const displayDate = value => value ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value)) : '-';
 const apiUrl = path => `${API_PREFIX}${path}`;
 // 운영에서 비활성인 개발 전용 경로와 실제 "대상 없음"(404)을 목업으로 가리지 않는다.
+/**
+ * 계정에 딸린 것을 전부 비운다. 토큰만 지우면 이전 계정의 추천·하트·사진·알림이
+ * 다음 로그인 화면에 그대로 남는다. 같은 탭에서 계정을 바꿀 때 남의 데이터가 보인다.
+ */
+function resetSession() {
+  state.user = null; state.me = null; state.daily = null;
+  state.cards = []; state.images = []; state.notices = [];
+  state.hearted = new Set(); state.sentRequests = [];
+}
+
 function setToken(token) { state.token = token || null; token ? sessionStorage.setItem(STORAGE_KEY, token) : sessionStorage.removeItem(STORAGE_KEY); }
 function showNotice(message, type = 'success') { state.notices = [{ message, type }]; renderNotices(); }
 function renderNotices() { const slot = document.querySelector('#toast'); if (slot) slot.innerHTML = state.notices.map(n => `<p class="toast ${n.type}">${escapeHtml(n.message)}</p>`).join(''); }
@@ -62,6 +72,7 @@ const api = {
   uploadImage(file, slot) { const form = new FormData(); form.append('file', file); if (slot) form.append('slot', String(slot)); return request('/me/images', { method: 'POST', body: form }); },
   deleteImage: imageId => request(`/me/images/${imageId}`, { method: 'DELETE' }),
   admin: path => request(`/admin/${path}`),
+  withdraw: () => request('/me', { method: 'DELETE' }),
 };
 
 function layout(content, active = '') { const nav = state.user ? `<a href="#/home" class="${active === 'home' ? 'active' : ''}">홈</a><a href="#/inbox" class="${active === 'inbox' ? 'active' : ''}">받은 알림</a><a href="#/chats" class="${active === 'chats' ? 'active' : ''}">채팅</a><a href="#/mypage" class="${active === 'mypage' ? 'active' : ''}">마이</a>${state.user.role === 'ADMIN' ? '<a href="#/admin" class="admin-link">관리</a>' : ''}<button class="link-button" id="logout">로그아웃</button>` : `<a href="#/login">로그인</a><a class="nav-join" href="#/signup">가입하기</a>`; return `<header class="header"><a class="brand" href="#/home">KKAGUNG<span>.</span></a><nav>${nav}</nav></header><div id="toast" aria-live="polite"></div><main>${content}</main><footer>© 2026 KKAGUNG</footer>`; }
@@ -91,12 +102,12 @@ function photoSlot(image, slot) {
 function inbox() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">INBOX</p><h1>받은 관심</h1></div><div class="tabs"><button data-tab="hearts" class="tab active">받은 하트</button><button data-tab="requests" class="tab">받은 채팅 요청</button></div></div><div id="inbox-list"><div class="loading">목록을 불러오는 중이에요…</div></div></section>`, 'inbox'); }
 function chats() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">CHAT</p><h1>채팅방</h1></div></div><div id="room-list"><div class="loading">채팅방을 불러오는 중이에요…</div></div></section>`, 'chats'); }
 function chatRoom() { return layout(`<section class="chat-page"><a class="back" href="#/chats">← 채팅 목록</a><div id="chat-header" class="chat-header loading">채팅방을 불러오는 중이에요…</div><div id="messages" class="messages"><div class="loading">메시지를 불러오는 중이에요…</div></div><form id="message-form" class="message-form"><input name="content" maxlength="1000" placeholder="메시지를 입력하세요" required><button class="button">보내기</button></form></section>`, 'chats'); }
-function mypage() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">MY PAGE</p><h1>내 설정</h1></div><a class="text-link" href="#/profile">프로필 수정 →</a></div><article class="setting-card"><h2>내 사진</h2><p>최대 3장까지 올릴 수 있습니다. JPG·PNG·WEBP, 10MB 이하.</p><p class="form-error" id="photo-error" aria-live="polite"></p><div id="photo-slots" class="profile-grid"><p class="loading">확인 중…</p></div><p class="privacy-note">추천 카드에는 흐림 처리된 사진만 나갑니다. 원본은 상대가 채팅 요청을 수락한 뒤에만 공개됩니다.</p></article><div class="settings-grid" style="margin-top:14px"><article class="setting-card"><h2>차단 및 신고</h2><p>차단한 사용자는 추천과 상호작용에서 제외됩니다.</p><a class="outline-button" href="#/blocks">차단 목록 보기</a></article><article class="setting-card"><h2>계정</h2><p>${escapeHtml(state.user?.email || '')}</p><span class="source-pill">${escapeHtml(state.user?.role || 'USER')}</span></article></div></section>`, 'mypage'); }
+function mypage() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">MY PAGE</p><h1>내 설정</h1></div><a class="text-link" href="#/profile">프로필 수정 →</a></div><article class="setting-card"><h2>내 사진</h2><p>최대 3장까지 올릴 수 있습니다. JPG·PNG·WEBP, 10MB 이하.</p><p class="form-error" id="photo-error" aria-live="polite"></p><div id="photo-slots" class="profile-grid"><p class="loading">확인 중…</p></div><p class="privacy-note">추천 카드에는 흐림 처리된 사진만 나갑니다. 원본은 상대가 채팅 요청을 수락한 뒤에만 공개됩니다.</p></article><div class="settings-grid" style="margin-top:14px"><article class="setting-card"><h2>차단 및 신고</h2><p>차단한 사용자는 추천과 상호작용에서 제외됩니다.</p><a class="outline-button" href="#/blocks">차단 목록 보기</a></article><article class="setting-card"><h2>계정</h2><p>${escapeHtml(state.user?.email || '')}</p><span class="source-pill">${escapeHtml(state.user?.role || 'USER')}</span><p class="form-error" id="withdraw-error" aria-live="polite"></p><button class="outline-button" id="withdraw">회원 탈퇴</button><span class="privacy-note">탈퇴하면 추천과 채팅에서 즉시 제외되고 다시 로그인할 수 없습니다.</span></article></div></section>`, 'mypage'); }
 function blocks() { return layout(`<section class="page"><a class="back" href="#/mypage">← 마이페이지</a><p class="eyebrow">SAFETY</p><h1>차단 목록</h1><div class="empty-state">차단한 사용자가 없습니다.</div></section>`, 'mypage'); }
 function admin() { return layout(`<section class="page admin-page"><div class="section-title"><div><p class="eyebrow">ADMIN</p><h1>운영 대시보드</h1></div><span class="admin-notice">관리자 API는 현재 권한을 서버에서 다시 검증합니다.</span></div><div id="admin-dashboard" class="metric-grid"><div class="loading">운영 지표를 불러오는 중이에요…</div></div><div class="admin-columns"><section class="setting-card"><h2>사용자 관리</h2><div id="admin-users" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>신고 관리</h2><div id="admin-reports" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>운영 설정</h2><div id="admin-settings" class="loading">불러오는 중…</div></section></div></section>`, 'admin'); }
 
-async function loadMe() { try { state.me = await api.me(); state.user = { ...state.user, id: state.me.id, email: state.me.email, role: state.me.role }; } catch (error) { if (error.status === 401) { setToken(null); state.user = null; } else throw error; } }
-function completeLogin(result) { setToken(result.token); state.user = result.user; location.hash = result.user.role === 'ADMIN' ? '#/admin' : '#/home'; }
+async function loadMe() { try { state.me = await api.me(); state.user = { ...state.user, id: state.me.id, email: state.me.email, role: state.me.role }; } catch (error) { if (error.status === 401) { setToken(null); resetSession(); } else throw error; } }
+function completeLogin(result) { resetSession(); setToken(result.token); state.user = result.user; location.hash = result.user.role === 'ADMIN' ? '#/admin' : '#/home'; }
 function bindCardActions() { document.querySelectorAll('[data-heart]').forEach(button => button.onclick = () => toggleHeart(button.dataset.heart, button)); }
 async function toggleHeart(userId, button) { const removing = state.hearted.has(userId); button.disabled = true; try { await api.heart(userId, removing); removing ? state.hearted.delete(userId) : state.hearted.add(userId); button.textContent = removing ? '♡ 하트' : '♥ 하트 취소'; showNotice(removing ? '하트를 취소했어요.' : '하트를 보냈어요.'); } catch (error) { showNotice(error.message, 'error'); } finally { button.disabled = false; } }
 async function refreshCards() { const button = document.querySelector('#refresh-button'); button.disabled = true; try { const refreshed = await api.refresh(); state.cards = refreshed.cards || []; state.daily.refreshTicket = { ...state.daily.refreshTicket, ...refreshed.refreshTicket }; document.querySelector('#recommendations').innerHTML = state.cards.length ? state.cards.map(card).join('') : '<div class="empty-state">새 추천 후보가 없어요. 새로고침권은 사용되지 않았어요.</div>'; document.querySelector('#daily-area').innerHTML = fortuneBanner(state.daily); bindCardActions(); document.querySelector('#refresh-button')?.addEventListener('click', refreshCards); showNotice('새 추천 카드를 불러왔어요.'); } catch (error) { showNotice(error.message, 'error'); button.disabled = false; } }
@@ -128,7 +139,67 @@ async function loadCardDetail(id) {
 async function loadInbox(kind) { const slot = document.querySelector('#inbox-list'); try { const result = kind === 'hearts' ? await api.receivedHearts() : await api.chatRequests('received'); const items = result.items || []; slot.innerHTML = items.length ? items.map(item => { const partner = item.sender || item.partner; return `<article class="list-card">${cardAvatar(partner)}<div><h2>${escapeHtml(partner.displayName)} <small>${partner.age}</small></h2><p>${escapeHtml(item.message || partner.recommendReason || '나에게 관심을 보냈어요.')}</p>${kind === 'hearts' ? `<button class="button request-from-heart" data-user="${partner.userId}">채팅 요청하기</button>` : `<div class="inline-actions"><button class="button accept-request" data-request="${item.requestId}">수락</button><button class="outline-button reject-request" data-request="${item.requestId}">거절</button></div>`}</div></article>`; }).join('') : '<div class="empty-state">아직 받은 항목이 없어요.</div>'; if (kind === 'hearts') slot.querySelectorAll('.request-from-heart').forEach(button => button.onclick = () => api.sendChatRequest(button.dataset.user, '하트를 보고 채팅을 요청했어요.').then(() => showNotice('채팅 요청을 보냈어요.')).catch(error => showNotice(error.message, 'error'))); else { slot.querySelectorAll('.accept-request').forEach(button => button.onclick = () => resolveRequest(button.dataset.request, 'accept')); slot.querySelectorAll('.reject-request').forEach(button => button.onclick = () => resolveRequest(button.dataset.request, 'reject')); } } catch (error) { renderError(error, slot); } document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => { document.querySelectorAll('[data-tab]').forEach(tab => tab.classList.toggle('active', tab === button)); loadInbox(button.dataset.tab); }); }
 async function resolveRequest(id, action) { try { const result = await api.resolveRequest(id, action); if (action === 'accept') { showNotice('수락했어요. 채팅방에서 서로의 프로필을 확인하세요.'); location.hash = `#/chats/${result.chatRoom?.roomId || result.roomId}`; } else { showNotice('요청을 거절했어요.'); loadInbox('requests'); } } catch (error) { showNotice(error.message, 'error'); } }
 async function loadRooms() { const slot = document.querySelector('#room-list'); try { const result = await api.rooms(); const items = result.items || []; slot.innerHTML = items.length ? items.map(room => `<a class="room-card" href="#/chats/${room.roomId}">${cardAvatar(room.partner)}<div><h2>${escapeHtml(room.partner?.displayName || '상대')}</h2><p>${room.lastMessage ? escapeHtml(room.lastMessage.preview) : '수락된 채팅방 · 상세 프로필은 이 방에서만 공개됩니다.'}</p>${room.lastMessage ? `<small>${displayDate(room.lastMessage.sentAt)}</small>` : ''}</div>${room.unreadCount > 0 ? `<span class="badge">${room.unreadCount}</span>` : '<span>→</span>'}</a>`).join('') : '<div class="empty-state">열린 채팅방이 없어요. 채팅 요청이 수락되면 이곳에 표시돼요.</div>'; } catch (error) { renderError(error, slot); } }
-async function loadRoom(id) { const header = document.querySelector('#chat-header'); const messageSlot = document.querySelector('#messages'); try { const room = await api.room(id); const partner = room.revealedProfile || room.partner || {}; header.className = 'chat-header'; header.innerHTML = `<div><h2>${escapeHtml(partner.displayName || '상대')}</h2><p>${escapeHtml(partner.intro || '채팅 요청 수락 후 공개된 프로필입니다.')}</p><span class="privacy-note">실제 사진 URL은 이 채팅방 참여자에게만 일시적으로 제공됩니다.</span></div><button id="block-user" class="outline-button" data-user="${partner.userId}">차단</button>`; document.querySelector('#block-user')?.addEventListener('click', () => api.block(partner.userId).then(() => { showNotice('차단했어요. 신규 메시지를 보낼 수 없습니다.'); location.hash = '#/chats'; }).catch(error => showNotice(error.message, 'error'))); const messages = await api.messages(id); messageSlot.innerHTML = (messages.items || []).map(message => `<div class="message ${String(message.senderId) === String(state.user?.id) ? 'mine' : ''}"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`).join('') || '<div class="empty-state">첫 메시지를 보내 보세요.</div>'; document.querySelector('#message-form').onsubmit = async event => { event.preventDefault(); const input = event.currentTarget.elements.content; try { const message = await api.sendMessage(id, input.value); messageSlot.querySelector('.empty-state')?.remove(); messageSlot.insertAdjacentHTML('beforeend', `<div class="message mine"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`); input.value = ''; messageSlot.scrollTop = messageSlot.scrollHeight; } catch (error) { showNotice(error.message, 'error'); } }; } catch (error) { renderError(error, header); renderError(error, messageSlot); } }
+/**
+ * 수락된 방에서만 상대 원본 사진이 내려온다. 서명 URL 이고 60초면 만료되므로,
+ * 받자마자 그려서 브라우저가 내려받게 둔다. 뒤늦게 그리면 깨진다.
+ */
+function revealedPhotos(images) {
+  if (!Array.isArray(images) || images.length === 0) return '<p class="muted">상대가 올린 사진이 없어요.</p>';
+  const items = images.map((image, index) => `<div class="person-image"><img src="${escapeHtml(image.url)}" alt="상대의 사진 ${index + 1}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'placeholder-icon',textContent:'✦'}))"></div>`).join('');
+  return `<div class="reveal-gallery">${items}</div>`;
+}
+
+/** 보낼 수 없는 이유를 그대로 말한다. 폼만 살아 있으면 눌러 보고서야 거절당한다. */
+function sendBlockedReason(room) {
+  if (room.blockedByMe) return '차단한 상대예요. 차단을 풀면 다시 보낼 수 있어요.';
+  return '지금은 메시지를 보낼 수 없어요.';
+}
+
+async function loadRoom(id) {
+  const header = document.querySelector('#chat-header');
+  const messageSlot = document.querySelector('#messages');
+  const form = document.querySelector('#message-form');
+  try {
+    const room = await api.room(id);
+    const partner = room.partner || {};
+    const facts = [partner.regionLabel, partner.heightCm ? `${partner.heightCm}cm` : null, partner.jobCategory, partner.mbti]
+      .filter(Boolean).map(escapeHtml).join(' · ');
+    header.className = 'chat-header';
+    header.innerHTML = `<div><h2>${escapeHtml(partner.displayName || '상대')}${partner.age ? ` <small>${partner.age}</small>` : ''}</h2>`
+      + (facts ? `<p>${facts}</p>` : '')
+      + (partner.intro ? `<p>${escapeHtml(partner.intro)}</p>` : '')
+      + revealedPhotos(partner.originalImages)
+      + `<span class="privacy-note">채팅 요청을 수락해 공개된 사진입니다. 내려받거나 다시 올리지 말아 주세요.</span></div>`
+      + `<button id="block-user" class="outline-button" data-user="${escapeHtml(String(partner.userId || ''))}">차단</button>`;
+
+    document.querySelector('#block-user')?.addEventListener('click', () => api.block(partner.userId)
+      .then(() => { showNotice('차단했어요. 신규 메시지를 보낼 수 없습니다.'); location.hash = '#/chats'; })
+      .catch(error => showNotice(error.message, 'error')));
+
+    const messages = await api.messages(id);
+    messageSlot.innerHTML = (messages.items || []).map(message => `<div class="message ${String(message.senderId) === String(state.user?.id) ? 'mine' : ''}"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`).join('')
+      || '<div class="empty-state">첫 메시지를 보내 보세요.</div>';
+    messageSlot.scrollTop = messageSlot.scrollHeight;
+
+    // 서버가 거절할 요청이면 폼을 잠근다. 눌러 보고서야 알게 두지 않는다.
+    if (room.canSendMessage === false) {
+      form.innerHTML = `<p class="muted">${escapeHtml(sendBlockedReason(room))}</p>`;
+      return;
+    }
+
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const input = event.currentTarget.elements.content;
+      try {
+        const message = await api.sendMessage(id, input.value);
+        messageSlot.querySelector('.empty-state')?.remove();
+        messageSlot.insertAdjacentHTML('beforeend', `<div class="message mine"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`);
+        input.value = '';
+        messageSlot.scrollTop = messageSlot.scrollHeight;
+      } catch (error) { showNotice(error.message, 'error'); }
+    };
+  } catch (error) { renderError(error, header); renderError(error, messageSlot); }
+}
 async function loadImages() {
   const target = document.querySelector('#photo-slots');
   if (!target) return;
@@ -137,7 +208,30 @@ async function loadImages() {
     const bySlot = new Map(state.images.map(image => [image.slot, image]));
     target.innerHTML = [1, 2, 3].map(slot => photoSlot(bySlot.get(slot), slot)).join('');
     bindPhotoSlots();
+    bindWithdraw();
   } catch (error) { renderError(error, target); }
+}
+
+/** 되돌릴 수 없는 동작이라 한 번 더 누르게 한다. 성공하면 남은 상태까지 비운다. */
+function bindWithdraw() {
+  const button = document.querySelector('#withdraw');
+  const errorSlot = document.querySelector('#withdraw-error');
+  if (!button || button.dataset.bound === 'yes') return;
+  button.dataset.bound = 'yes';
+  button.onclick = async () => {
+    if (button.dataset.sure !== 'yes') { button.dataset.sure = 'yes'; button.textContent = '정말 탈퇴할까요?'; return; }
+    button.disabled = true;
+    if (errorSlot) errorSlot.textContent = '';
+    try {
+      await api.withdraw();
+      setToken(null); resetSession();
+      location.hash = '#/';
+      showNotice('탈퇴를 마쳤어요. 이용해 주셔서 고맙습니다.');
+    } catch (error) {
+      if (errorSlot) errorSlot.textContent = error.message;
+      button.disabled = false; button.dataset.sure = ''; button.textContent = '회원 탈퇴';
+    }
+  };
 }
 
 function bindPhotoSlots() {
@@ -182,7 +276,7 @@ function bindPhotoSlots() {
 async function loadAdmin() { const slots = { dashboard: document.querySelector('#admin-dashboard'), users: document.querySelector('#admin-users'), reports: document.querySelector('#admin-reports'), settings: document.querySelector('#admin-settings') }; try { const [dashboard, users, reports, settings] = await Promise.all([api.admin('dashboard'), api.admin('users'), api.admin('reports'), api.admin('settings')]); slots.dashboard.innerHTML = [['가입', dashboard.signups], ['운세 열람', dashboard.fortuneOpens], ['하트', dashboard.hearts], ['채팅 요청', dashboard.chatRequests], ['대기 신고', dashboard.reportsPending], ['새로고침 잔여', dashboard.refreshInventory?.remaining]].map(([label, value]) => `<article class="metric"><span>${label}</span><b>${value ?? '-'}</b></article>`).join(''); slots.users.innerHTML = (users.items || []).map(user => `<div class="admin-row"><b>${escapeHtml(user.displayName || user.email)}</b><span>${escapeHtml(user.status)}</span><button class="outline-button" data-report-user="${user.userId}">신고</button></div>`).join('') || '<p class="muted">사용자가 없습니다.</p>'; slots.reports.innerHTML = (reports.items || []).map(report => `<div class="admin-row"><b>${escapeHtml(report.reasonCode)}</b><span>${escapeHtml(report.status)}</span><small>${escapeHtml(report.detail || '')}</small></div>`).join('') || '<p class="muted">대기 신고가 없습니다.</p>'; slots.settings.innerHTML = `<p>인기 배지: 하트 ${settings.badge?.popularMinUniqueHearts ?? '-'} · 요청 ${settings.badge?.popularMinUniqueChatRequests ?? '-'}</p><p>다음 날 새로고침권: ${settings.dailyRefresh?.nextTotal ?? '-'}개</p>`; document.querySelectorAll('[data-report-user]').forEach(button => button.onclick = () => api.report({ targetType: 'USER', targetId: button.dataset.reportUser, reasonCode: 'OTHER', detail: '관리자 화면 목업 신고' }).then(() => showNotice('신고가 접수되었습니다.')).catch(error => showNotice(error.message, 'error'))); } catch (error) { Object.values(slots).forEach(slot => renderError(error, slot)); if (error.status === 403) showNotice('관리자 권한이 필요합니다.', 'error'); } }
 
 function bind(route) {
-  document.querySelector('#logout')?.addEventListener('click', async () => { try { await api.logout(); setToken(null); state.user = null; state.me = null; location.hash = '#/'; } catch (error) { showNotice(error.message, 'error'); } });
+  document.querySelector('#logout')?.addEventListener('click', async () => { try { await api.logout(); setToken(null); resetSession(); location.hash = '#/'; } catch (error) { showNotice(error.message, 'error'); } });
   const loginForm = document.querySelector('#login-form');
   if (loginForm) { loginForm.onsubmit = async event => { event.preventDefault(); const errorSlot = loginForm.querySelector('.form-error'); errorSlot.textContent = ''; try { completeLogin(await api.login(new FormData(loginForm).get('email'), new FormData(loginForm).get('password'))); } catch (error) { errorSlot.textContent = error.message; } }; api.testAccounts().then(accounts => { const target = document.querySelector('#test-accounts'); if (!target) return; target.innerHTML = accounts.map(account => `<button class="test-account" data-account="${account.accountId}">${escapeHtml(account.displayName || account.email)} <small>${escapeHtml(account.role)}</small></button>`).join(''); target.querySelectorAll('[data-account]').forEach(button => button.onclick = async () => { try { completeLogin(await api.testLogin(button.dataset.account)); } catch (error) { showNotice(error.message, 'error'); } }); }).catch(() => document.querySelector('.test-login')?.remove()); }
   const signupForm = document.querySelector('#signup-form');
