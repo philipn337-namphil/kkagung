@@ -23,9 +23,13 @@
  *
  * 사용자마다 다른 X-Forwarded-For 를 보낸다. 그러지 않으면 모든 부하가 한 IP 로
  * 집계되어 속도 제한(api-ip 60초당 90회)에 걸려 측정이 성립하지 않는다.
- * 서버에 TRUST_PROXY 가 설정돼 있어야 이 헤더가 반영된다. LB 를 거치면 LB 가 이
- * 헤더에 자기 쪽 주소를 덧붙이므로, 첫 측정에서 응답 코드에 429 가 섞여 나오는지
- * 꼭 확인한다. 섞여 나오면 LB 가 헤더를 덧붙이지 않고 덮어쓴다는 뜻이다.
+ * NCP ALB 는 이 헤더를 덮어쓰지 않고 덧붙인다(측정으로 확인). 서버가 보는 값은
+ * "<여기서 넣은 가짜 IP>, <작업자 공인 IP>" 가 된다. Express 의 trust proxy 는 서버 쪽부터
+ * 신뢰 홉 수만큼 벗기므로, 운영값 TRUST_PROXY=1 에서는 작업자 실제 IP 가 잡히고 가짜 IP 는
+ * 무시된다. 그러면 전부 한 바구니로 집계되어 측정이 성립하지 않는다.
+ *
+ * 측정 동안만 서버를 TRUST_PROXY=2 로 둔다. 운영에서는 반드시 1 이다. 2 로 두면
+ * 클라이언트가 헤더를 한 겹 위조해 속도 제한을 우회할 수 있다.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -197,6 +201,7 @@ for (const label of ["daily/open", "recommendations"]) {
 console.log("\n응답 코드");
 for (const [key, count] of [...statusCount.entries()].sort()) console.log(`  ${key}: ${count}`);
 if ([...statusCount.keys()].some((key) => key.endsWith("429"))) {
-  console.log("\n429 가 섞였다. X-Forwarded-For 가 서버까지 전달되지 않았을 수 있다.");
-  console.log("LB 가 이 헤더를 덮어쓰는지, 서버의 TRUST_PROXY 가 맞는지 확인할 것.");
+  console.log("\n429 가 섞였다. 측정이 성립하지 않는다.");
+  console.log("LB 뒤에서 잴 때는 서버를 TRUST_PROXY=2 로 두어야 한다. 1 이면 작업자 실제 IP 로");
+  console.log("전부 집계된다. 측정이 끝나면 운영값 1 로 되돌릴 것.");
 }
