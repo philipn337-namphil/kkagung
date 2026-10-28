@@ -47,30 +47,31 @@ const has = (name) => process.argv.includes(name);
 const PRESENTER = "narae" + DOMAIN;
 const ADMIN = "unjeong" + DOMAIN;
 
+// 이름은 성을 뺀 이름만 받는다(docs/01). 카드에는 아예 나가지 않고, 수락된 채팅방에서만 보인다.
 const people = [
-  { id: "narae", name: "서나래", gender: "MALE", age: 29, region: "SEOUL_MAPO", height: 177, job: "OFFICE_WORKER", mbti: "ENFP", animal: "강아지상", intro: "주말엔 성수동 카페 돌아다녀요. 같이 다닐 사람 찾습니다." },
-  { id: "unjeong", name: "최운정", gender: "FEMALE", age: 31, region: "SEOUL_JONGNO", height: 165, job: "OFFICE_WORKER", mbti: "ISTJ", animal: "고양이상", intro: "운영 담당 계정입니다.", role: "ADMIN" },
+  { id: "narae", name: "나래", gender: "MALE", age: 29, region: "SEOUL_MAPO", height: 177, job: "OFFICE_WORKER", mbti: "ENFP", animal: "강아지상", intro: "주말엔 성수동 카페 돌아다녀요. 같이 다닐 사람 찾습니다." },
+  { id: "unjeong", name: "운정", gender: "FEMALE", age: 31, region: "SEOUL_JONGNO", height: 165, job: "OFFICE_WORKER", mbti: "ISTJ", animal: "고양이상", intro: "운영 담당 계정입니다.", role: "ADMIN" },
 
-  { id: "jiwon", name: "김지원", gender: "FEMALE", age: 27, region: "SEOUL_MAPO", height: 163, job: "OFFICE_WORKER", mbti: "INFP", animal: "고양이상", intro: "전시 보러 다니는 걸 좋아해요. 요즘은 도예 배우는 중." },
-  { id: "haeun", name: "박하은", gender: "FEMALE", age: 26, region: "SEOUL_SEODAEMUN", height: 160, job: "STUDENT", mbti: "ENFJ", animal: "토끼상", intro: "대학원 마지막 학기예요. 커피 한 잔 하면서 얘기해요." },
-  { id: "seoyeon", name: "이서연", gender: "FEMALE", age: 30, region: "SEOUL_GANGNAM", height: 168, job: "FREELANCER", mbti: "ENTP", animal: "여우상", intro: "디자인 일 합니다. 밤에 걷는 걸 좋아해요." },
-  { id: "minseo", name: "정민서", gender: "FEMALE", age: 28, region: "SEOUL_YONGSAN", height: 166, job: "OFFICE_WORKER", mbti: "ISFJ", animal: "사슴상", intro: "조용한 데서 책 읽는 주말을 좋아합니다." },
-  { id: "yuna", name: "한유나", gender: "FEMALE", age: 25, region: "SEOUL_MAPO", height: 158, job: "STUDENT", mbti: "ESFP", animal: "강아지상", intro: "러닝 크루 하고 있어요. 같이 뛰실 분!" },
-  { id: "dain", name: "오다인", gender: "FEMALE", age: 32, region: "SEOUL_JONGNO", height: 170, job: "SELF_EMPLOYED", mbti: "INTJ", animal: "고양이상", intro: "작은 가게 하나 합니다. 쉬는 날엔 영화관에 있어요." },
-  { id: "ssol", name: "강소을", gender: "FEMALE", age: 29, region: "BUSAN_HAEUNDAE", height: 162, job: "FREELANCER", mbti: "INFJ", animal: "토끼상", intro: "바다 근처 살아요. 사진 찍는 게 취미입니다." },
-  { id: "chaewon", name: "윤채원", gender: "FEMALE", age: 27, region: "SEOUL_GANGNAM", height: 164, job: "OFFICE_WORKER", mbti: "ESTJ", animal: "여우상", intro: "계획 세우는 걸 좋아해요. 여행 같이 가실 분." },
-  { id: "arin", name: "신아린", gender: "FEMALE", age: 24, region: "SEOUL_SEODAEMUN", height: 159, job: "STUDENT", mbti: "ISFP", animal: "사슴상", intro: "그림 그려요. 조용한 사람입니다." },
-  { id: "jimin", name: "임지민", gender: "FEMALE", age: 33, region: "SEOUL_YONGSAN", height: 167, job: "OFFICE_WORKER", mbti: "ENTJ", animal: "고양이상", intro: "운동하고 맛있는 거 먹는 게 낙이에요." },
-  { id: "nayeon", name: "구나연", gender: "FEMALE", age: 26, region: "SEOUL_MAPO", height: 161, job: "FREELANCER", mbti: "INTP", animal: "토끼상", intro: "번역 일 합니다. 집에서 보내는 시간이 많아요." },
+  { id: "jiwon", name: "지원", gender: "FEMALE", age: 27, region: "SEOUL_MAPO", height: 163, job: "OFFICE_WORKER", mbti: "INFP", animal: "고양이상", intro: "전시 보러 다니는 걸 좋아해요. 요즘은 도예 배우는 중." },
+  { id: "haeun", name: "하은", gender: "FEMALE", age: 26, region: "SEOUL_SEODAEMUN", height: 160, job: "STUDENT", mbti: "ENFJ", animal: "토끼상", intro: "대학원 마지막 학기예요. 커피 한 잔 하면서 얘기해요." },
+  { id: "seoyeon", name: "서연", gender: "FEMALE", age: 30, region: "SEOUL_GANGNAM", height: 168, job: "FREELANCER", mbti: "ENTP", animal: "여우상", intro: "디자인 일 합니다. 밤에 걷는 걸 좋아해요." },
+  { id: "minseo", name: "민서", gender: "FEMALE", age: 28, region: "SEOUL_YONGSAN", height: 166, job: "OFFICE_WORKER", mbti: "ISFJ", animal: "사슴상", intro: "조용한 데서 책 읽는 주말을 좋아합니다." },
+  { id: "yuna", name: "유나", gender: "FEMALE", age: 25, region: "SEOUL_MAPO", height: 158, job: "STUDENT", mbti: "ESFP", animal: "강아지상", intro: "러닝 크루 하고 있어요. 같이 뛰실 분!" },
+  { id: "dain", name: "다인", gender: "FEMALE", age: 32, region: "SEOUL_JONGNO", height: 170, job: "SELF_EMPLOYED", mbti: "INTJ", animal: "고양이상", intro: "작은 가게 하나 합니다. 쉬는 날엔 영화관에 있어요." },
+  { id: "ssol", name: "소을", gender: "FEMALE", age: 29, region: "BUSAN_HAEUNDAE", height: 162, job: "FREELANCER", mbti: "INFJ", animal: "토끼상", intro: "바다 근처 살아요. 사진 찍는 게 취미입니다." },
+  { id: "chaewon", name: "채원", gender: "FEMALE", age: 27, region: "SEOUL_GANGNAM", height: 164, job: "OFFICE_WORKER", mbti: "ESTJ", animal: "여우상", intro: "계획 세우는 걸 좋아해요. 여행 같이 가실 분." },
+  { id: "arin", name: "아린", gender: "FEMALE", age: 24, region: "SEOUL_SEODAEMUN", height: 159, job: "STUDENT", mbti: "ISFP", animal: "사슴상", intro: "그림 그려요. 조용한 사람입니다." },
+  { id: "jimin", name: "지민", gender: "FEMALE", age: 33, region: "SEOUL_YONGSAN", height: 167, job: "OFFICE_WORKER", mbti: "ENTJ", animal: "고양이상", intro: "운동하고 맛있는 거 먹는 게 낙이에요." },
+  { id: "nayeon", name: "나연", gender: "FEMALE", age: 26, region: "SEOUL_MAPO", height: 161, job: "FREELANCER", mbti: "INTP", animal: "토끼상", intro: "번역 일 합니다. 집에서 보내는 시간이 많아요." },
 
-  { id: "junho", name: "이준호", gender: "MALE", age: 30, region: "SEOUL_GANGNAM", height: 180, job: "OFFICE_WORKER", mbti: "ISTP", animal: "늑대상", intro: "주말마다 등산 갑니다." },
-  { id: "taemin", name: "박태민", gender: "MALE", age: 28, region: "SEOUL_MAPO", height: 175, job: "FREELANCER", mbti: "ENFP", animal: "강아지상", intro: "음악 작업 해요. 공연 자주 보러 다닙니다." },
-  { id: "doyun", name: "김도윤", gender: "MALE", age: 32, region: "SEOUL_JONGNO", height: 178, job: "SELF_EMPLOYED", mbti: "ESTJ", animal: "곰상", intro: "요리하는 걸 좋아합니다. 집밥 잘해요." },
-  { id: "siwoo", name: "장시우", gender: "MALE", age: 26, region: "SEOUL_SEODAEMUN", height: 173, job: "STUDENT", mbti: "INFJ", animal: "고양이상", intro: "대학원생입니다. 산책 좋아해요." },
-  { id: "hyunwoo", name: "조현우", gender: "MALE", age: 34, region: "SEOUL_YONGSAN", height: 182, job: "OFFICE_WORKER", mbti: "INTJ", animal: "늑대상", intro: "주중엔 바쁘고 주말엔 조용히 쉽니다." },
-  { id: "jaeh", name: "서재희", gender: "MALE", age: 27, region: "BUSAN_HAEUNDAE", height: 176, job: "OFFICE_WORKER", mbti: "ESFJ", animal: "강아지상", intro: "부산 살아요. 서핑 배우는 중입니다." },
-  { id: "minjun", name: "황민준", gender: "MALE", age: 31, region: "SEOUL_GANGNAM", height: 179, job: "FREELANCER", mbti: "ENTP", animal: "여우상", intro: "사진 찍습니다. 같이 출사 다니실 분." },
-  { id: "woojin", name: "노우진", gender: "MALE", age: 25, region: "SEOUL_MAPO", height: 172, job: "STUDENT", mbti: "ISFP", animal: "토끼상", intro: "그림 그리고 전시 보러 다녀요." },
+  { id: "junho", name: "준호", gender: "MALE", age: 30, region: "SEOUL_GANGNAM", height: 180, job: "OFFICE_WORKER", mbti: "ISTP", animal: "늑대상", intro: "주말마다 등산 갑니다." },
+  { id: "taemin", name: "태민", gender: "MALE", age: 28, region: "SEOUL_MAPO", height: 175, job: "FREELANCER", mbti: "ENFP", animal: "강아지상", intro: "음악 작업 해요. 공연 자주 보러 다닙니다." },
+  { id: "doyun", name: "도윤", gender: "MALE", age: 32, region: "SEOUL_JONGNO", height: 178, job: "SELF_EMPLOYED", mbti: "ESTJ", animal: "곰상", intro: "요리하는 걸 좋아합니다. 집밥 잘해요." },
+  { id: "siwoo", name: "시우", gender: "MALE", age: 26, region: "SEOUL_SEODAEMUN", height: 173, job: "STUDENT", mbti: "INFJ", animal: "고양이상", intro: "대학원생입니다. 산책 좋아해요." },
+  { id: "hyunwoo", name: "현우", gender: "MALE", age: 34, region: "SEOUL_YONGSAN", height: 182, job: "OFFICE_WORKER", mbti: "INTJ", animal: "늑대상", intro: "주중엔 바쁘고 주말엔 조용히 쉽니다." },
+  { id: "jaeh", name: "재희", gender: "MALE", age: 27, region: "BUSAN_HAEUNDAE", height: 176, job: "OFFICE_WORKER", mbti: "ESFJ", animal: "강아지상", intro: "부산 살아요. 서핑 배우는 중입니다." },
+  { id: "minjun", name: "민준", gender: "MALE", age: 31, region: "SEOUL_GANGNAM", height: 179, job: "FREELANCER", mbti: "ENTP", animal: "여우상", intro: "사진 찍습니다. 같이 출사 다니실 분." },
+  { id: "woojin", name: "우진", gender: "MALE", age: 25, region: "SEOUL_MAPO", height: 172, job: "STUDENT", mbti: "ISFP", animal: "토끼상", intro: "그림 그리고 전시 보러 다녀요." },
 ];
 
 const REGION_SCOPE = ["SEOUL_MAPO", "SEOUL_JONGNO", "SEOUL_GANGNAM", "SEOUL_YONGSAN", "SEOUL_SEODAEMUN", "BUSAN_HAEUNDAE"];
