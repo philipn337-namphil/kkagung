@@ -206,10 +206,16 @@ describe("응답 필드", () => {
 
     const touched = await db.profileImage.findMany({
       where: { userId: { in: [aiOnly, blurOnly, dropped].map((id) => BigInt(id)) } },
-      select: { id: true, userId: true, imageType: true, generationStatus: true },
+      select: { id: true, userId: true, imageType: true, generationStatus: true, objectKey: true },
     });
 
     try {
+      // 첫 후보가 AI 를 가졌다고 가정하지 않는다. 실제 업로드는 AI 를 PENDING 으로 만들고,
+      // 시연용 시드도 그렇다. 이 케이스가 보려는 것은 "AI 가 있으면 AI" 이므로 여기서 만든다.
+      await db.profileImage.updateMany({
+        where: { userId: BigInt(aiOnly), imageType: "AI_PUBLIC" },
+        data: { generationStatus: "DONE", objectKey: `profiles/ai/${aiOnly}-recommendation-test.webp` },
+      });
       // 두 번째 후보는 AI 를 치워 블러만 남기고, 세 번째 후보는 공개 이미지를 모두 실패로 만든다.
       await db.profileImage.updateMany({
         where: { userId: BigInt(blurOnly), imageType: "AI_PUBLIC" },
@@ -233,15 +239,18 @@ describe("응답 필드", () => {
       expect(byUserId.has(dropped)).toBe(false);
     } finally {
       for (const row of touched) {
-        await db.profileImage.update({ where: { id: row.id }, data: { generationStatus: row.generationStatus } });
+        await db.profileImage.update({ where: { id: row.id }, data: { generationStatus: row.generationStatus, objectKey: row.objectKey } });
       }
       if (previous === undefined) delete process.env.OBJECT_STORAGE_ENDPOINT;
       else process.env.OBJECT_STORAGE_ENDPOINT = previous;
     }
 
     // 시드 이미지가 원래 상태로 돌아왔는지 확인한다.
-    expect(await db.profileImage.count()).toBe(24);
-    expect(await db.profileImage.count({ where: { generationStatus: "DONE" } })).toBe(24);
+    // DB 전체를 세지 않는다. 부하용·시연용 시드가 같은 DB 에 들어와 있으면 그 수가 달라진다.
+    const seedImages = { where: { user: { email: { endsWith: "@kkagung.local" } } } };
+    const total = await db.profileImage.count(seedImages);
+    expect(total).toBe(24);
+    expect(await db.profileImage.count({ where: { ...seedImages.where, generationStatus: "DONE" } })).toBe(total);
   });
 
   it("공개 이미지 기준 주소가 설정되면 공개 버킷 경로로 URL 을 만든다", async () => {
