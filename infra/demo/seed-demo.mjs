@@ -39,6 +39,7 @@ const loadStorage = async () => {
 
 const bcrypt = (await dep("bcryptjs", "index.js")).default;
 const sharp = (await dep("sharp", "dist/index.mjs")).default;
+const { readFile } = await import("node:fs/promises");
 const { PrismaClient } = await dep("@prisma/client", "index.js");
 const { privateBucket, publicBucket, putObject, storageReady } = await loadStorage();
 
@@ -83,9 +84,50 @@ const REGION_SCOPE = ["SEOUL_MAPO", "SEOUL_JONGNO", "SEOUL_GANGNAM", "SEOUL_YONG
  * 사람마다 다른 아바타. 사람 사진이 아니라 색이 다른 도형이다.
  * 흐림본은 같은 그림을 뭉갠 것이라, 수락 전후 차이가 한눈에 보인다.
  */
-const avatar = (index, blur) => {
-  const hue = (index * 37 + 15) % 360;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
+// 사진은 infra/demo/photos/<id>.jpg 를 쓴다.
+// 자기 사진이 없는 사람은 같은 성별의 사진을 돌려 쓰되 크롭과 좌우를 달리한다.
+//
+// 색을 돌려 다른 사람처럼 보이게 해 보았지만 안 됐다. 크게 돌리면 얼굴이 초록·보라가 되고,
+// 자연스러운 범위면 블러 뒤에도 같은 사람으로 보인다. 블러는 얼굴을 지우지만 실루엣과
+// 구도는 남기기 때문이다. 그래서 색은 건드리지 않고 구도만 바꾼다.
+//
+// 사진을 더 넣을수록 겹침이 줄어든다. 성별당 네 장쯤이면 추천 카드 세 장에서 같은 사람이
+// 나올 일이 거의 없다.
+const PHOTO_DIR = new URL("./photos/", import.meta.url);
+const EXTS = ["jpg", "jpeg", "png", "webp"];
+
+const readPhoto = async (id) => {
+  for (const ext of EXTS) {
+    try { return await readFile(new URL(`${id}.${ext}`, PHOTO_DIR)); } catch { /* 다음 확장자 */ }
+  }
+  return null;
+};
+
+// 성별별로 가진 사진을 한 번만 모은다.
+let pool = null;
+const photoPool = async (people) => {
+  if (pool) return pool;
+  pool = { MALE: [], FEMALE: [] };
+  for (const person of people) {
+    const buf = await readPhoto(person.id);
+    if (buf) pool[person.gender]?.push(buf);
+  }
+  return pool;
+};
+
+// 같은 사진을 쓰더라도 사람마다 다르게 잘라 쓴다. 같은 사람은 몇 번 돌려도 같은 결과다.
+const reframe = (image, seed) => {
+  const zoom = 1 + ((seed * 13) % 28) / 100;          // 1.00 ~ 1.27
+  const side = Math.round(1024 / zoom);
+  const left = Math.round((1024 - side) * (((seed * 7) % 11) / 10));
+  const top = Math.round((1024 - side) * (((seed * 5) % 7) / 20));  // 얼굴이 위쪽이라 조금만
+  const cropped = image.extract({ left, top, width: side, height: side }).resize(1024, 1024);
+  return seed % 2 === 0 ? cropped.flop() : cropped;
+};
+
+const drawn = (seed) => {
+  const hue = (seed * 37 + 15) % 360;
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
     + `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">`
     + `<stop offset="0" stop-color="hsl(${hue} 62% 82%)"/>`
     + `<stop offset="1" stop-color="hsl(${(hue + 28) % 360} 55% 68%)"/>`
@@ -93,8 +135,22 @@ const avatar = (index, blur) => {
     + `<rect width="1024" height="1024" fill="url(#g)"/>`
     + `<circle cx="512" cy="408" r="176" fill="hsl(${hue} 42% 46%)"/>`
     + `<rect x="236" y="676" width="552" height="360" rx="176" fill="hsl(${hue} 42% 46%)"/>`
-    + `</svg>`;
-  const image = sharp(Buffer.from(svg));
+    + `</svg>`);
+};
+
+const portrait = async (person, index, people) => {
+  const own = await readPhoto(person.id);
+  if (own) return sharp(own).resize(1024, 1024, { fit: "cover" });
+
+  const shelf = (await photoPool(people))[person.gender] ?? [];
+  if (shelf.length === 0) return sharp(drawn(index));   // 사진이 하나도 없으면 그려서 쓴다
+
+  const picked = shelf[index % shelf.length];
+  return reframe(sharp(picked).resize(1024, 1024, { fit: "cover" }), index + 1);
+};
+
+const renderPhoto = async (person, index, people, blur) => {
+  const image = await portrait(person, index, people);
   return (blur ? image.blur(26) : image).webp({ quality: 82 }).toBuffer();
 };
 
@@ -157,8 +213,8 @@ const seed = async () => {
     const originalKey = key("originals", "webp");
     const blurredKey = key("profiles/blur", "webp");
     if (storageReady()) {
-      await putObject(privateBucket(), originalKey, await avatar(index, false), "image/webp");
-      await putObject(publicBucket(), blurredKey, await avatar(index, true), "image/webp");
+      await putObject(privateBucket(), originalKey, await renderPhoto(person, index, people, false), "image/webp");
+      await putObject(publicBucket(), blurredKey, await renderPhoto(person, index, people, true), "image/webp");
     }
     const common = { userId: user.id, slot: 1, byteSize: 40000, width: 1024, height: 1024, processedAt: now, failedReasonCode: null };
     await prisma.profileImage.createMany({
