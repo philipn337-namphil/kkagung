@@ -497,6 +497,36 @@ Init Script 는 기동할 때 한 번만 돈다. 이미 떠 있는 서버는 스
 
 `TRUST_PROXY` 를 측정용으로 바꿀 때도 같은 방법을 쓴다(5절 참고).
 
+### 이미지만 바꿀 때는 서버를 굴리지 않아도 된다
+
+프론트와 API 는 **각자 독립된 컨테이너**다. 이미지 태그만 바뀐 것이라면 그 컨테이너만
+다시 띄우면 된다. 서버를 반납하면 ASG 가 새로 만드는 3분 동안 끊긴다(1대일 때).
+
+**컨테이너 이름은 이미지 이름과 다르다.** Init Script 31~32행에 있다.
+
+```
+이미지 kkagung-api  → 컨테이너 kkagung-api
+이미지 kkagung-web  → 컨테이너 kkagung-frontend     ← 헷갈리기 쉽다
+```
+
+**레지스트리 로그인이 먼저다.** Init Script 가 기동 끝에 `trap ... docker logout` 으로
+자격증명을 지운다(94행). 설계대로이며, 그래서 서버에는 로그인 상태가 남아 있지 않다.
+`docker pull` 이 권한 오류로 떨어지면 이것이다.
+
+```bash
+# 앱 서버마다. 2대면 한 대씩 해야 LB 가 나머지로 넘겨 무중단이 된다.
+echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+docker pull "$REGISTRY_HOST/kkagung-web:<태그>"
+docker logout "$REGISTRY_HOST"
+rm -f ~/.docker/config.json
+
+docker rm -f kkagung-frontend
+docker run -d --name kkagung-frontend --restart unless-stopped -p 5173:5173   -e API_BASE_URL=/ "$REGISTRY_HOST/kkagung-web:<태그>"
+```
+
+**Init Script 도 같이 고친다.** 지금 떠 있는 서버에는 영향이 없지만, 고치지 않으면
+**ASG 가 나중에 만드는 서버는 옛 이미지로 뜬다.** 고쳐 두기만 하고 서버는 굴리지 않는다.
+
 ---
 
 ## 5. 부하 테스트
@@ -684,11 +714,25 @@ rm -f loadtest/reset.json   # 살아 있는 토큰이 들어 있다
 
 ```bash
 # 앱 서버에서 (징검다리를 거쳐 들어간다)
-curl -fsSL -o seed-demo.mjs \
-  https://raw.githubusercontent.com/philipn337-namphil/kkagung/main/infra/demo/seed-demo.mjs
+RAW=https://raw.githubusercontent.com/philipn337-namphil/kkagung/main/infra/demo
+curl -fsSL -o seed-demo.mjs "$RAW/seed-demo.mjs"
+mkdir -p photos && cd photos
+for n in narae minseo jiwon dain haeun seoyeon yuna junho taemin siwoo; do
+  curl -fsSL -O "$RAW/photos/$n.jpg"
+done
+cd ..
+
+docker exec kkagung-api mkdir -p /app/demo
 docker cp seed-demo.mjs kkagung-api:/app/demo/seed-demo.mjs
+docker cp photos        kkagung-api:/app/demo/photos
 docker exec kkagung-api node demo/seed-demo.mjs
 ```
+
+**`photos/` 를 빠뜨리면 조용히 실패한다.** 사진이 없으면 예전처럼 그려진 아바타로 떨어지는
+길이 남아 있어 **오류가 나지 않는다.** 카드가 전부 색 동그라미면 이것을 빠뜨린 것이다.
+
+밖에서는 화면을 볼 수 없으므로 **흐림본의 크기**로 본다. 그려진 아바타는 1KB 안팎이고,
+사람 사진을 흐리게 처리한 것은 8KB 쯤 된다.
 
 **넣는 자리가 `/app/demo/` 여야 한다.** 스크립트가 저장소 모듈을 `../dist/src/lib/...` 로
 상대 경로로 찾는다. `/app/infra/demo/` 처럼 한 단계 더 들어가면 모듈을 못 찾고 실패한다.
