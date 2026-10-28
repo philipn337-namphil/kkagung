@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
 import { PrismaClient } from "@prisma/client";
-import { privateBucket, publicBucket, putObject, storageReady } from "../src/lib/objectStorage.js";
+import { deleteObject, privateBucket, publicBucket, putObject, storageReady } from "../src/lib/objectStorage.js";
 const prisma = new PrismaClient();
 
 type Gender = "MALE" | "FEMALE";
@@ -153,6 +153,19 @@ async function main() {
     });
 
     for (const row of imageRows(p.seedNo)) {
+      // 다시 돌릴 때 앞선 시드가 올려 둔 객체가 남을 수 있다. 특히 AI 는 예전에 DONE 으로
+      // 시드해 객체까지 올렸는데 지금은 PENDING + 빈 키라, 지우지 않으면 아무도 참조하지
+      // 않는 객체가 공개 버킷에 남는다. 그 키가 공개 읽기로 열려 있으므로 치운다.
+      const before = await prisma.profileImage.findUnique({
+        where: { userId_slot_imageType: { userId: user.id, slot: 1, imageType: row.imageType } },
+        select: { objectKey: true },
+      });
+      if (storageReady() && before !== null && before.objectKey !== "" && before.objectKey !== row.objectKey) {
+        const bucket = row.imageType === "ORIGINAL_PRIVATE" ? privateBucket() : publicBucket();
+        // 지우지 못해도 시드는 계속한다. 남은 객체는 수명 주기 정책으로 정리한다.
+        try { await deleteObject(bucket, before.objectKey); } catch { /* 계속 */ }
+      }
+
       // 올릴 객체가 없는 행(AI PENDING)은 건너뛴다.
       if (row.objectKey !== "") await seedImageObject(row.imageType, row.objectKey, p.seedNo);
       const pending = row.status === "PENDING";
