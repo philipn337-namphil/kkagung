@@ -128,7 +128,67 @@ async function loadCardDetail(id) {
 async function loadInbox(kind) { const slot = document.querySelector('#inbox-list'); try { const result = kind === 'hearts' ? await api.receivedHearts() : await api.chatRequests('received'); const items = result.items || []; slot.innerHTML = items.length ? items.map(item => { const partner = item.sender || item.partner; return `<article class="list-card">${cardAvatar(partner)}<div><h2>${escapeHtml(partner.displayName)} <small>${partner.age}</small></h2><p>${escapeHtml(item.message || partner.recommendReason || '나에게 관심을 보냈어요.')}</p>${kind === 'hearts' ? `<button class="button request-from-heart" data-user="${partner.userId}">채팅 요청하기</button>` : `<div class="inline-actions"><button class="button accept-request" data-request="${item.requestId}">수락</button><button class="outline-button reject-request" data-request="${item.requestId}">거절</button></div>`}</div></article>`; }).join('') : '<div class="empty-state">아직 받은 항목이 없어요.</div>'; if (kind === 'hearts') slot.querySelectorAll('.request-from-heart').forEach(button => button.onclick = () => api.sendChatRequest(button.dataset.user, '하트를 보고 채팅을 요청했어요.').then(() => showNotice('채팅 요청을 보냈어요.')).catch(error => showNotice(error.message, 'error'))); else { slot.querySelectorAll('.accept-request').forEach(button => button.onclick = () => resolveRequest(button.dataset.request, 'accept')); slot.querySelectorAll('.reject-request').forEach(button => button.onclick = () => resolveRequest(button.dataset.request, 'reject')); } } catch (error) { renderError(error, slot); } document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => { document.querySelectorAll('[data-tab]').forEach(tab => tab.classList.toggle('active', tab === button)); loadInbox(button.dataset.tab); }); }
 async function resolveRequest(id, action) { try { const result = await api.resolveRequest(id, action); if (action === 'accept') { showNotice('수락했어요. 채팅방에서 서로의 프로필을 확인하세요.'); location.hash = `#/chats/${result.chatRoom?.roomId || result.roomId}`; } else { showNotice('요청을 거절했어요.'); loadInbox('requests'); } } catch (error) { showNotice(error.message, 'error'); } }
 async function loadRooms() { const slot = document.querySelector('#room-list'); try { const result = await api.rooms(); const items = result.items || []; slot.innerHTML = items.length ? items.map(room => `<a class="room-card" href="#/chats/${room.roomId}">${cardAvatar(room.partner)}<div><h2>${escapeHtml(room.partner?.displayName || '상대')}</h2><p>${room.lastMessage ? escapeHtml(room.lastMessage.preview) : '수락된 채팅방 · 상세 프로필은 이 방에서만 공개됩니다.'}</p>${room.lastMessage ? `<small>${displayDate(room.lastMessage.sentAt)}</small>` : ''}</div>${room.unreadCount > 0 ? `<span class="badge">${room.unreadCount}</span>` : '<span>→</span>'}</a>`).join('') : '<div class="empty-state">열린 채팅방이 없어요. 채팅 요청이 수락되면 이곳에 표시돼요.</div>'; } catch (error) { renderError(error, slot); } }
-async function loadRoom(id) { const header = document.querySelector('#chat-header'); const messageSlot = document.querySelector('#messages'); try { const room = await api.room(id); const partner = room.revealedProfile || room.partner || {}; header.className = 'chat-header'; header.innerHTML = `<div><h2>${escapeHtml(partner.displayName || '상대')}</h2><p>${escapeHtml(partner.intro || '채팅 요청 수락 후 공개된 프로필입니다.')}</p><span class="privacy-note">실제 사진 URL은 이 채팅방 참여자에게만 일시적으로 제공됩니다.</span></div><button id="block-user" class="outline-button" data-user="${partner.userId}">차단</button>`; document.querySelector('#block-user')?.addEventListener('click', () => api.block(partner.userId).then(() => { showNotice('차단했어요. 신규 메시지를 보낼 수 없습니다.'); location.hash = '#/chats'; }).catch(error => showNotice(error.message, 'error'))); const messages = await api.messages(id); messageSlot.innerHTML = (messages.items || []).map(message => `<div class="message ${String(message.senderId) === String(state.user?.id) ? 'mine' : ''}"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`).join('') || '<div class="empty-state">첫 메시지를 보내 보세요.</div>'; document.querySelector('#message-form').onsubmit = async event => { event.preventDefault(); const input = event.currentTarget.elements.content; try { const message = await api.sendMessage(id, input.value); messageSlot.querySelector('.empty-state')?.remove(); messageSlot.insertAdjacentHTML('beforeend', `<div class="message mine"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`); input.value = ''; messageSlot.scrollTop = messageSlot.scrollHeight; } catch (error) { showNotice(error.message, 'error'); } }; } catch (error) { renderError(error, header); renderError(error, messageSlot); } }
+/**
+ * 수락된 방에서만 상대 원본 사진이 내려온다. 서명 URL 이고 60초면 만료되므로,
+ * 받자마자 그려서 브라우저가 내려받게 둔다. 뒤늦게 그리면 깨진다.
+ */
+function revealedPhotos(images) {
+  if (!Array.isArray(images) || images.length === 0) return '<p class="muted">상대가 올린 사진이 없어요.</p>';
+  const items = images.map((image, index) => `<div class="person-image"><img src="${escapeHtml(image.url)}" alt="상대의 사진 ${index + 1}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'placeholder-icon',textContent:'✦'}))"></div>`).join('');
+  return `<div class="reveal-gallery">${items}</div>`;
+}
+
+/** 보낼 수 없는 이유를 그대로 말한다. 폼만 살아 있으면 눌러 보고서야 거절당한다. */
+function sendBlockedReason(room) {
+  if (room.blockedByMe) return '차단한 상대예요. 차단을 풀면 다시 보낼 수 있어요.';
+  return '지금은 메시지를 보낼 수 없어요.';
+}
+
+async function loadRoom(id) {
+  const header = document.querySelector('#chat-header');
+  const messageSlot = document.querySelector('#messages');
+  const form = document.querySelector('#message-form');
+  try {
+    const room = await api.room(id);
+    const partner = room.partner || {};
+    const facts = [partner.regionLabel, partner.heightCm ? `${partner.heightCm}cm` : null, partner.jobCategory, partner.mbti]
+      .filter(Boolean).map(escapeHtml).join(' · ');
+    header.className = 'chat-header';
+    header.innerHTML = `<div><h2>${escapeHtml(partner.displayName || '상대')}${partner.age ? ` <small>${partner.age}</small>` : ''}</h2>`
+      + (facts ? `<p>${facts}</p>` : '')
+      + (partner.intro ? `<p>${escapeHtml(partner.intro)}</p>` : '')
+      + revealedPhotos(partner.originalImages)
+      + `<span class="privacy-note">채팅 요청을 수락해 공개된 사진입니다. 내려받거나 다시 올리지 말아 주세요.</span></div>`
+      + `<button id="block-user" class="outline-button" data-user="${escapeHtml(String(partner.userId || ''))}">차단</button>`;
+
+    document.querySelector('#block-user')?.addEventListener('click', () => api.block(partner.userId)
+      .then(() => { showNotice('차단했어요. 신규 메시지를 보낼 수 없습니다.'); location.hash = '#/chats'; })
+      .catch(error => showNotice(error.message, 'error')));
+
+    const messages = await api.messages(id);
+    messageSlot.innerHTML = (messages.items || []).map(message => `<div class="message ${String(message.senderId) === String(state.user?.id) ? 'mine' : ''}"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`).join('')
+      || '<div class="empty-state">첫 메시지를 보내 보세요.</div>';
+    messageSlot.scrollTop = messageSlot.scrollHeight;
+
+    // 서버가 거절할 요청이면 폼을 잠근다. 눌러 보고서야 알게 두지 않는다.
+    if (room.canSendMessage === false) {
+      form.innerHTML = `<p class="muted">${escapeHtml(sendBlockedReason(room))}</p>`;
+      return;
+    }
+
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const input = event.currentTarget.elements.content;
+      try {
+        const message = await api.sendMessage(id, input.value);
+        messageSlot.querySelector('.empty-state')?.remove();
+        messageSlot.insertAdjacentHTML('beforeend', `<div class="message mine"><p>${escapeHtml(message.body)}</p><small>${displayDate(message.sentAt)}</small></div>`);
+        input.value = '';
+        messageSlot.scrollTop = messageSlot.scrollHeight;
+      } catch (error) { showNotice(error.message, 'error'); }
+    };
+  } catch (error) { renderError(error, header); renderError(error, messageSlot); }
+}
 async function loadImages() {
   const target = document.querySelector('#photo-slots');
   if (!target) return;
