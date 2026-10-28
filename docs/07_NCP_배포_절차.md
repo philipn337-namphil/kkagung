@@ -665,8 +665,14 @@ docker cp seed-demo.mjs kkagung-api:/app/demo/seed-demo.mjs
 docker exec kkagung-api node demo/seed-demo.mjs
 ```
 
-`/app/demo/` 가 없으면 먼저 만든다(`docker exec kkagung-api mkdir -p /app/demo`).
-같은 방법으로 부하 스크립트도 넣는다.
+**넣는 자리가 `/app/demo/` 여야 한다.** 스크립트가 저장소 모듈을 `../dist/src/lib/...` 로
+상대 경로로 찾는다. `/app/infra/demo/` 처럼 한 단계 더 들어가면 모듈을 못 찾고 실패한다.
+없으면 먼저 만든다(`docker exec kkagung-api mkdir -p /app/demo`).
+
+부하 스크립트(`infra/loadtest/`)는 패키지명만 쓰므로 자리가 자유롭다. 같은 방법으로 넣는다.
+
+**서버를 교체하면 넣어 둔 스크립트가 사라진다.** 이미지에 없는 파일이라 새 컨테이너에는
+없다. 교체할 때마다 다시 넣는다.
 
 ### 넣고 나서 확인할 것
 
@@ -675,11 +681,18 @@ docker exec kkagung-api node demo/seed-demo.mjs
 | | |
 |---|---|
 | 추천 카드 | `용산구 · 사슴상 28` 처럼 **이름 없이** 나오는가 |
-| 카드 사진 | 흐림본이 보이는가 (403 이면 `OBJECT_STORAGE_*` 가 빠진 것이다) |
+| 카드 사진 | 흐림본이 보이는가 (안 보이면 시드에 `OBJECT_STORAGE_*` 가 빠진 것이다) |
 | 받은 관심 | 하트 3개, 채팅 요청 2개가 있는가 |
 | 채팅방 | 이름과 **선명한 원본 사진**이 나오는가 |
 
 시드는 같은 object key 에 덮어쓰므로 다시 돌려도 중복이 생기지 않는다.
+
+**없는 객체도 404 가 아니라 403 이다.** 공개 버킷의 목록 조회를 막아 두어서, 저장소가
+"없다" 고 알려주는 대신 거부한다. 지운 객체가 정말 지워졌는지 볼 때 403 을 실패로 읽기
+쉬운데 그 반대다. 접근 제어가 동작한다는 증거다.
+
+그래서 **403 만으로는 "객체가 없다" 와 "객체는 있는데 공개가 아니다" 를 구별할 수 없다.**
+사진이 안 보일 때는 `profile_images` 의 `objectKey` 와 `generationStatus` 를 먼저 본다.
 
 ## 제출물 묶기
 
