@@ -2,88 +2,99 @@
 #
 # NCP App Server Init Script
 #
-# 서버 이미지에 Docker 가 설치돼 있다는 전제로, 기동 시점에 Container Registry 에서
-# 애플리케이션 이미지를 받아 컨테이너를 띄운다. Auto Scaling 으로 새로 뜨는 서버도
-# 같은 스크립트를 쓰므로, 증설된 서버가 최신 이미지를 받는다.
+# ASCII ONLY. The NCP console rejects an Init Script that contains non-ASCII
+# characters, so this file stays in English even though the rest of the
+# repository is commented in Korean. Keep it that way: a translated copy made
+# at registration time drifts from this one. See docs/07 for the Korean notes.
 #
-# 레지스트리는 공인 주소다. VPC 에서는 Private Endpoint 를 쓸 수 없으므로(Classic 전용),
-# 앱 서브넷에 NAT Gateway 경로가 있어야 이 스크립트가 동작한다.
+# The server image is expected to have Docker installed. On boot this script
+# pulls the application image from Container Registry and starts it. Auto
+# Scaling uses the same script, so a scaled-out server gets the same image.
 #
-# ── 값을 어디에 넣나 ────────────────────────────────────────
-# NCP VPC 서버 생성 화면에는 환경변수를 넣는 칸이 없다. 고를 수 있는 것은 미리
-# 콘솔에 저장해 둔 Init Script 하나뿐이다. 값을 스크립트 바깥에서 넘길 방법이
-# 없으므로, 아래 블록에 직접 적는 것이 유일한 통로다.
+# The registry is a public address. A VPC cannot use the private endpoint
+# (Classic only), so the app subnet needs a NAT Gateway route for this to work,
+# and the app ACG needs its outbound opened.
 #
-# 저장소의 이 파일은 값이 빈 템플릿으로 둔다. 값을 채운 사본은 콘솔에만 두고
-# 커밋하지 않는다. 콘솔 접근 권한이 있는 사람에게 평문으로 보이는 것은 감수한다.
-# 검토한 대안과 그 한계는 docs/07_NCP_배포_절차.md 의 "시크릿을 두는 곳" 에 있다.
+# ---- Where the values come from --------------------------------------------
+# The NCP VPC server creation screen has no field for environment variables.
+# The only thing you can attach is an Init Script whose body is stored in the
+# console. There is no way to pass values from outside, so filling the block
+# below is the only channel.
+#
+# The copy in this repository is a template with empty values. Fill the values
+# only in the console copy and never commit them. Anyone with console access
+# can read them in plain text; that is accepted for this deployment. The
+# alternatives that were considered are written up in docs/07.
 #
 set -euo pipefail
 
 CONTAINER_NAME="kkagung-api"
 FRONTEND_CONTAINER="kkagung-frontend"
 
-# ── 콘솔에 등록할 때 큰따옴표 안을 채운다 ───────────────────
-APP_IMAGE=""                   # <레지스트리>.kr.ncr.ntruss.com/kkagung-api:<커밋 해시>
-DATABASE_URL=""                # mysql://kkagung_app:<비밀번호>@<Cloud DB 주소>:3306/kkagung
-JWT_SECRET=""                  # 32바이트 이상 무작위
-FRONTEND_URL=""                # 서비스 도메인 (HTTPS)
+# ---- Fill these in the console ---------------------------------------------
+APP_IMAGE=""                   # <registry>.kr.ncr.ntruss.com/kkagung-api:<commit>
+DATABASE_URL=""                # mysql://kkagung_app:<password>@<cloud db host>:3306/kkagung
+                               #   percent-encode the password: @ is %40, # is %23, / is %2F
+JWT_SECRET=""                  # 32+ random bytes
+FRONTEND_URL=""                # service address the browser sees, scheme included
 OBJECT_STORAGE_ENDPOINT=""     # https://kr.object.ncloudstorage.com
-OBJECT_STORAGE_ACCESS_KEY=""   # NCP API 인증키
-OBJECT_STORAGE_SECRET_KEY=""   # 위 인증키의 시크릿
-NCP_ACCESS_KEY=""              # Container Registry 로그인. 위와 같은 인증키를 쓴다
-NCP_SECRET_KEY=""              # 위 인증키의 시크릿
-ADMIN_ALLOWED_IP_CIDRS=""      # 관리자 접속 대역. 비우면 관리자 API 가 전부 403 이다
+OBJECT_STORAGE_ACCESS_KEY=""   # NCP API key
+OBJECT_STORAGE_SECRET_KEY=""   # secret of the same key
+NCP_ACCESS_KEY=""              # Container Registry login. Same NCP API key as above
+NCP_SECRET_KEY=""              # secret of the same key
+ADMIN_ALLOWED_IP_CIDRS=""      # admin source ranges. Empty means every admin call is 403
 
-# ── 선택값. 비워 두면 괄호 안 값을 쓴다 ─────────────────────
-OBJECT_STORAGE_PUBLIC_ENDPOINT=""  # (위 엔드포인트와 같은 값) 브라우저가 공개 이미지를 받는 주소
+# ---- Optional. Empty falls back to the value in parentheses -----------------
+OBJECT_STORAGE_PUBLIC_ENDPOINT=""  # (same as the endpoint above) address the browser fetches public images from
 OBJECT_STORAGE_BUCKET_PUBLIC=""    # (kkagung-images-public)
 OBJECT_STORAGE_BUCKET_PRIVATE=""   # (kkagung-images-private)
 OBJECT_STORAGE_REGION=""           # (kr-standard)
 OBJECT_STORAGE_FORCE_PATH_STYLE="" # (true)
-JWT_EXPIRES_IN=""                  # (900s) 운영 기본값이라 비워 두면 된다(D-03)
-TRUST_PROXY=""                     # (1) 비우면 모든 사용자가 LB 주소 하나로 집계되어 함께 429 를 맞는다
+JWT_EXPIRES_IN=""                  # (900s) production default, so leaving it empty is fine (D-03)
+TRUST_PROXY=""                     # (1) empty means every user is counted as the LB address and they all hit 429 together
 
-# ── 프론트를 같은 서버에 둘 때만 채운다 ─────────────────────
-# LB 가 경로로 나눠 보내는 구성(/api/* 는 8080, 나머지는 5173)에서 쓴다.
-# 비워 두면 API 컨테이너만 뜬다.
-FRONTEND_IMAGE=""                  # <레지스트리>.kr.ncr.ntruss.com/kkagung-web:<커밋 해시>
-API_BASE_URL=""                    # (/) 브라우저가 API 를 부르는 주소.
-                                   #     LB 한 대 뒤에 둘 다 있으면 / 로 두어 같은 Origin 으로 부른다.
+# ---- Frontend. Fill only when it runs on this same server -------------------
+# Used when the LB splits by path: /api/* to 8080, everything else to 5173.
+# Leaving it empty starts the API container only.
+FRONTEND_IMAGE=""                  # <registry>.kr.ncr.ntruss.com/kkagung-web:<commit>
+API_BASE_URL=""                    # (/) address the browser calls the API on.
+                                   #     With both behind one LB, / keeps it same-origin.
 
-# 채우지 않은 값이 있으면 여기서 멈춘다. 잘못된 설정으로 조용히 뜨는 것보다 낫다.
-: "${APP_IMAGE:?APP_IMAGE 를 채울 것}"
-: "${DATABASE_URL:?DATABASE_URL 을 채울 것}"
-: "${JWT_SECRET:?JWT_SECRET 을 채울 것}"
-: "${FRONTEND_URL:?FRONTEND_URL 을 채울 것}"
-: "${OBJECT_STORAGE_ENDPOINT:?OBJECT_STORAGE_ENDPOINT 를 채울 것}"
-: "${OBJECT_STORAGE_ACCESS_KEY:?OBJECT_STORAGE_ACCESS_KEY 를 채울 것}"
-: "${OBJECT_STORAGE_SECRET_KEY:?OBJECT_STORAGE_SECRET_KEY 를 채울 것}"
-: "${NCP_ACCESS_KEY:?NCP_ACCESS_KEY 를 채울 것}"
-: "${NCP_SECRET_KEY:?NCP_SECRET_KEY 를 채울 것}"
-# 비우면 lib/admin.ts 가 관리자 요청을 전부 403 으로 막는다. /health 는 정상이라 늦게 발견된다.
-: "${ADMIN_ALLOWED_IP_CIDRS:?ADMIN_ALLOWED_IP_CIDRS 를 채울 것}"
+# Stop here if something was not filled in. Better than coming up misconfigured.
+: "${APP_IMAGE:?fill APP_IMAGE}"
+: "${DATABASE_URL:?fill DATABASE_URL}"
+: "${JWT_SECRET:?fill JWT_SECRET}"
+: "${FRONTEND_URL:?fill FRONTEND_URL}"
+: "${OBJECT_STORAGE_ENDPOINT:?fill OBJECT_STORAGE_ENDPOINT}"
+: "${OBJECT_STORAGE_ACCESS_KEY:?fill OBJECT_STORAGE_ACCESS_KEY}"
+: "${OBJECT_STORAGE_SECRET_KEY:?fill OBJECT_STORAGE_SECRET_KEY}"
+: "${NCP_ACCESS_KEY:?fill NCP_ACCESS_KEY}"
+: "${NCP_SECRET_KEY:?fill NCP_SECRET_KEY}"
+# Empty makes lib/admin.ts reject every admin request with 403, while /health
+# stays green, so the mistake surfaces late.
+: "${ADMIN_ALLOWED_IP_CIDRS:?fill ADMIN_ALLOWED_IP_CIDRS}"
 
-# 레지스트리 주소는 이미지 이름에서 꺼낸다. 따로 받으면 둘이 어긋난 채로 기동할 수 있다.
+# Take the registry host from the image name. Passing it separately lets the
+# two disagree and the server boots against the wrong registry.
 REGISTRY_HOST="${APP_IMAGE%%/*}"
 case "${REGISTRY_HOST}" in
   *.*) ;;
   *)
-    echo "APP_IMAGE 는 레지스트리 주소를 포함한 전체 이름이어야 한다." >&2
-    echo "  예) <레지스트리>.kr.ncr.ntruss.com/kkagung-api:<태그>" >&2
+    echo "APP_IMAGE must include the registry host." >&2
+    echo "  example: <registry>.kr.ncr.ntruss.com/kkagung-api:<tag>" >&2
     exit 1
     ;;
 esac
 
-# 비밀번호를 인자로 넘기면 ps 출력에 그대로 보인다. 표준입력으로 넘긴다.
+# Passing the password as an argument puts it in ps output. Send it on stdin.
 printf '%s' "${NCP_SECRET_KEY}" | docker login "${REGISTRY_HOST}" -u "${NCP_ACCESS_KEY}" --password-stdin
 
-# docker login 은 자격증명을 ~/.docker/config.json 에 남긴다. 인스턴스에 두지 않는다.
-# 중간에 실패해도 지워지도록 trap 으로 건다.
+# docker login leaves credentials in ~/.docker/config.json. Do not keep them on
+# the instance. The trap clears them even when a later step fails.
 trap 'docker logout "${REGISTRY_HOST}" >/dev/null 2>&1 || true' EXIT
 
-# 받아오는 것이 먼저다. 돌던 컨테이너를 먼저 지우면 pull 이 실패했을 때
-# 되돌릴 것도 없이 서비스만 내려간다.
+# Pull first. Removing the running container before the pull means a registry
+# failure takes the service down with nothing to roll back to.
 docker pull "${APP_IMAGE}"
 [ -n "${FRONTEND_IMAGE}" ] && docker pull "${FRONTEND_IMAGE}"
 
@@ -98,7 +109,7 @@ docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped -p 8080:8080 \
   -e FRONTEND_URL="${FRONTEND_URL}" \
   -e JWT_EXPIRES_IN="${JWT_EXPIRES_IN:-900s}" \
   -e TRUST_PROXY="${TRUST_PROXY:-1}" \
-  `# 마이그레이션은 배포 단계에서 한 번만 돌린다. 여러 대가 동시에 뜨므로 여기서는 끈다` \
+  `# Migrations run once from the deploy step. Several servers start at once, so keep this off here.` \
   -e RUN_MIGRATIONS_ON_START=false \
   -e OBJECT_STORAGE_ENDPOINT="${OBJECT_STORAGE_ENDPOINT}" \
   -e OBJECT_STORAGE_PUBLIC_ENDPOINT="${OBJECT_STORAGE_PUBLIC_ENDPOINT:-${OBJECT_STORAGE_ENDPOINT}}" \
@@ -111,15 +122,16 @@ docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped -p 8080:8080 \
   -e ADMIN_ALLOWED_IP_CIDRS="${ADMIN_ALLOWED_IP_CIDRS}" \
   "${APP_IMAGE}"
 
-# 프론트를 같은 서버에 둘 때만 띄운다. LB 가 경로를 보고 이쪽으로 보낸다.
-# API_BASE_URL 을 / 로 두면 브라우저가 같은 Origin 의 /api/v1 을 부르므로 CORS 가 걸리지 않는다.
+# Start the frontend only when it shares this server. The LB routes by path.
+# API_BASE_URL of / makes the browser call /api/v1 on the same origin, so CORS
+# never comes into play.
 if [ -n "${FRONTEND_IMAGE}" ]; then
   docker rm -f "${FRONTEND_CONTAINER}" >/dev/null 2>&1 || true
   docker run -d --name "${FRONTEND_CONTAINER}" --restart unless-stopped -p 5173:5173 -e API_BASE_URL="${API_BASE_URL:-/}" "${FRONTEND_IMAGE}"
 fi
 
-# LB 헬스체크가 붙기 전에 뜰 때까지 기다린다.
-# /health 는 DB 연결까지 확인하므로, 여기서 실패하면 LB 에 넣어도 의미가 없다.
+# Wait until it is up before the LB health check arrives. /health also checks
+# the database connection, so failing here means the LB would gain nothing.
 wait_for() {
   for _ in $(seq 1 30); do
     if curl -fsS -o /dev/null "$1"; then return 0; fi

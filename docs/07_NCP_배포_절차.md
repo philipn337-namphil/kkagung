@@ -12,7 +12,7 @@
 | `NODE_ENV` | `production` | 이미지 기본값이 `production`이라 비워도 되지만 명시한다 |
 | `JWT_SECRET` | 32바이트 이상 무작위 | **기동 거부.** 짧은 값과 알려진 개발 키도 거부한다(SEC-09) |
 | `JWT_EXPIRES_IN` | `900s` | 운영 기본값이 `900s`라 생략 가능(D-03) |
-| `DATABASE_URL` | Cloud DB 접속 문자열 | 기동 실패 |
+| `DATABASE_URL` | Cloud DB 접속 문자열 | 기동 실패. **비밀번호의 `@`·`#`·`/` 는 퍼센트 인코딩한다(`%40`·`%23`·`%2F`).** 안 하면 호스트 이름이 잘려 접속이 실패한다 |
 | `FRONTEND_URL` | 서비스 도메인 | CORS 가 막는다 |
 | **`TRUST_PROXY`** | LB 홉 수(예: `1`) 또는 LB 대역 | **모든 사용자가 LB 주소 하나로 집계되어 함께 429 를 맞는다** |
 | `RUN_MIGRATIONS_ON_START` | `false` | 인스턴스마다 마이그레이션이 실행된다 |
@@ -170,7 +170,7 @@ Subnet  kkagung-sn-lb       332078   10.0.1.0/24    공인   LoadBalancer
         kkagung-sn-app      332079   10.0.10.0/24   사설   일반
         kkagung-sn-db       332080   10.0.20.0/24   사설   일반
         kkagung-sn-nat      332184   10.0.2.0/24    공인   NatGateway
-ACG     kkagung-acg-lb      411093
+ACG     kkagung-acg-lb      411093   (미사용 - LB 는 ACG 를 가질 수 없다)
         kkagung-acg-app     411094
         kkagung-acg-db      411095   (미사용)
         cloud-mysql-2f8r8p  411098   Cloud DB 가 자동 생성
@@ -179,13 +179,33 @@ NATGW   kkagung-natgw                공인 IP 211.233.206.191 / 사설 10.0.2.6
 
 `kkagung-acg-db` 는 Cloud DB 가 전용 ACG 를 따로 만들기 때문에 쓰이지 않는다. 2단계를 참고한다.
 
-ACG 는 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서버가 늘어도 규칙을 고치지 않기 위해서다.
+ACG 는 되도록 IP 대역이 아니라 **다른 ACG 를 출발지로** 지정한다. 서버가 늘어도 규칙을
+고치지 않기 위해서다. **단 LB → 서버 구간은 예외다.** 아래를 먼저 읽는다.
 
 | ACG | 인바운드 허용 | 아웃바운드 허용 |
 |---|---|---|
-| `kkagung-acg-lb` | 인터넷 → 80 | `kkagung-acg-app` → 8080, 5173 |
-| `kkagung-acg-app` | `kkagung-acg-lb` → 8080, 5173 | **열어야 한다.** 아래 참고 |
+| `kkagung-acg-app` | `10.0.1.0/24`(LB 서브넷) → 8080, 5173 | **열어야 한다.** 아래 참고 |
 | `cloud-mysql-*` | `kkagung-acg-app` → 3306 | Cloud DB 가 자동으로 만든다 |
+
+#### LB 는 ACG 를 가질 수 없다
+
+**Load Balancer 는 NCP 관리형이라 사용자 ACG 에 속하지 않는다.** 생성 마법사에 ACG 를
+고르는 칸 자체가 없다(유형·이름·네트워크·부하처리성능·VPC·서브넷뿐).
+그래서 `kkagung-acg-lb` 를 만들어 두어도 적용 Network Interface 수가 0 인 채로 남고,
+**그걸 출발지로 쓴 규칙은 영원히 매칭되지 않는다.**
+
+LB 서브넷 대역(`10.0.1.0/24`)을 직접 허용한다. 여기서만 ACG 대신 대역을 쓴다.
+
+```
+kkagung-acg-app  in: 10.0.1.0/24 → 8080   (API)
+                 in: 10.0.1.0/24 → 5173   (프론트)
+```
+
+증상이 알아보기 어렵다. Target 상태가 **`DOWN` · `TCP TIMEOUT`** 으로 뜬다.
+`connection refused` 가 아니다. 컨테이너는 멀쩡히 떠 있는데 LB 쪽 패킷이 ACG 에서
+버려지는 것이고, LB 는 503 만 돌려주므로 서버에 들어가 보면 전부 정상으로 보인다.
+
+`kkagung-acg-lb`(411093) 는 쓰이지 않는다. `kkagung-acg-db`(411095) 와 같은 경우다.
 
 **아웃바운드는 기본이 비어 있고, NCP ACG 는 규칙에 없으면 막는다.**
 `kkagung-acg-app` 의 아웃바운드를 열지 않으면 Container Registry 와 Object Storage 로 나가지 못한다.
@@ -374,6 +394,9 @@ Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에�
 5. Init Script 를 먼저 콘솔에 등록하고(서버 생성 화면에서 고르려면 미리 있어야 한다),
    서버 설정 단계에서 그 스크립트를 고른다 — `infra/ncp/init-script.sh`
    - 등록할 때 상단 블록의 큰따옴표 안을 채운다. 채운 사본은 콘솔에만 둔다
+   - **콘솔은 ASCII 만 받는다.** 한글이 들어가면 저장이 거부된다. 그래서 저장소의
+     `init-script.sh` 는 주석과 오류 메시지가 영문이다. 등록할 때 번역해 쓰면 저장소
+     사본과 어긋나므로, 그 파일을 그대로 붙여넣고 값만 채운다
    - 필수 값이 없으면 기동 전에 멈춘다. 조용히 잘못된 설정으로 뜨는 것을 막는다
    - 레지스트리 비밀번호는 표준입력으로 넘긴다. 인자로 주면 `ps` 출력에 그대로 보인다
    - 받아오기를 먼저 하고 기존 컨테이너를 지운다. 반대로 하면 `pull` 이 실패했을 때
@@ -384,6 +407,7 @@ Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에�
 6. Application Load Balancer 를 `kkagung-sn-lb` 에 만든다
    - 리스너는 **HTTP 80**. 도메인을 확보하지 못해 인증서를 붙일 수 없다(아래 참고)
    - 경로 규칙으로 `/api/*` 는 8080, 나머지는 5173 으로 보낸다
+   - **LB 는 ACG 를 고를 수 없다.** 앱 ACG 가 LB 서브넷 대역을 허용해야 한다(1단계 참고)
 7. 헬스체크 경로는 `/health` 로 둔다. DB 연결까지 확인하므로 DB 가 끊긴 인스턴스는 자동으로 빠진다
 
 #### HTTPS 를 쓰지 않는다
@@ -527,6 +551,8 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] `FRONTEND_URL` 이 브라우저가 보는 주소와 **정확히** 같은가 (CORS 는 Origin 하나만 받는다)
 - [ ] LB 경로 규칙이 `/api/*` 를 8080 으로, 나머지를 5173 으로 보내는가
 - [ ] `/health` 가 LB 헬스체크에 연결됐는가
+- [ ] Target 상태가 `DOWN` · `TCP TIMEOUT` 이면 앱 ACG 의 출발지를 의심한다 (LB 는 ACG 를 못 가진다)
+- [ ] `DATABASE_URL` 비밀번호의 특수문자를 퍼센트 인코딩했는가
 - [ ] `APP_IMAGE` 태그가 `latest` 가 아니라 커밋을 가리키는가
 - [ ] 값이 채워진 Init Script 를 저장소에 커밋하지 않았는가 (저장소 파일은 빈 템플릿이어야 한다)
 - [ ] `ADMIN_ALLOWED_IP_CIDRS` 를 지정했는가 (비우면 관리자 API 전부 403. `/health` 는 정상이라 늦게 발견된다)
