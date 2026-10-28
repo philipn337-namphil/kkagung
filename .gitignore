@@ -53,3 +53,7 @@ coverage/
 .vscode/
 .idea/
 uploads/
+
+# 부하 테스트가 뽑은 토큰 파일 (유효한 JWT 가 들어 있다)
+infra/loadtest/tokens*.json
+tokens*.json
