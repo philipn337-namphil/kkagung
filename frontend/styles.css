@@ -15,3 +15,23 @@
 .admin-form input{margin-top:5px;padding:7px 9px;font-size:13px}
 .admin-form p{flex:1 1 100%;margin:0}
 .admin-form .outline-button{width:auto;margin:0;padding:8px 14px}
+/* 추천 카드 — 타로. 뒷면으로 깔리고 눌러야 뒤집힌다. */
+.tarot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.tarot-grid .loading,.tarot-grid .empty-state,.tarot-grid .status-card{grid-column:1/-1}
+.tarot{perspective:1200px;aspect-ratio:2/3}
+.tarot-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.2,.7,.3,1)}
+.tarot.flipped .tarot-inner{transform:rotateY(180deg)}
+.tarot-back,.tarot-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.tarot-back{display:grid;place-content:center;justify-items:center;gap:12px;padding:0;cursor:pointer;color:#eef6f1;font:inherit;border-color:#1c4536;background:radial-gradient(circle at 50% 36%,rgba(255,253,248,.2),transparent 62%),repeating-linear-gradient(45deg,#24503f 0 9px,#2b6650 9px 18px)}
+.tarot-back:hover{filter:brightness(1.1)}
+.tarot-back:focus-visible{outline:2px solid var(--deep);outline-offset:3px}
+.tarot-mark{font-size:46px;line-height:1;text-shadow:0 2px 12px rgba(0,0,0,.25)}
+.tarot-hint{font-size:11px;letter-spacing:.14em;opacity:.85}
+.tarot-face{transform:rotateY(180deg);display:flex;flex-direction:column;background:var(--paper)}
+.tarot-face .person-image{height:52%;flex:0 0 auto;border-radius:0}
+.tarot-face .person-info{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:5px;padding:13px 14px}
+.tarot-face .person-info p{margin:0}
+.tarot-face .card-actions{margin-top:auto}
+.tarot-face .outline-button{margin-top:0}
+@media(prefers-reduced-motion:reduce){.tarot-inner{transition:none}}
+@media(max-width:800px){.tarot-grid{grid-template-columns:1fr;justify-items:center}.tarot{width:min(100%,300px)}}

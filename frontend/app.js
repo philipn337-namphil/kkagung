@@ -4,7 +4,7 @@ const STORAGE_KEY = 'kkagung.access-token';
 const state = { token: sessionStorage.getItem(STORAGE_KEY), user: null, me: null, daily: null, cards: [], images: [], notices: [],
   // 서버가 준 값을 담아 두는 자리다. hearted 는 추천 응답의 heartedUserIds 로 채우고,
   // sentRequests 는 이번 세션에 보낸 채팅 요청이라 목록을 다시 받기 전까지 버튼 상태를 유지한다.
-  hearted: new Set(), sentRequests: [] };
+  hearted: new Set(), sentRequests: [], flipped: new Set(), flippedDate: null };
 
 class ApiError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -15,10 +15,28 @@ const apiUrl = path => `${API_PREFIX}${path}`;
  * 계정에 딸린 것을 전부 비운다. 토큰만 지우면 이전 계정의 추천·하트·사진·알림이
  * 다음 로그인 화면에 그대로 남는다. 같은 탭에서 계정을 바꿀 때 남의 데이터가 보인다.
  */
+// 뒤집은 카드는 그날 하루만 기억한다. 새로고침했다고 다시 덮이면 뽑은 의미가 없다.
+// 서버에 둘 값은 아니라 탭 저장소에 둔다. 날짜가 바뀌면 통째로 버린다.
+const FLIP_KEY = 'kkagung.flipped';
+function loadFlipped(serviceDate) {
+  state.flippedDate = serviceDate || null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(FLIP_KEY) || 'null');
+    state.flipped = new Set(saved && saved.date === serviceDate ? saved.ids : []);
+  } catch { state.flipped = new Set(); }
+}
+function rememberFlip(userId) {
+  state.flipped.add(userId);
+  try { sessionStorage.setItem(FLIP_KEY, JSON.stringify({ date: state.flippedDate, ids: [...state.flipped] })); }
+  catch { /* 저장하지 못해도 이번 화면에서는 뒤집힌 채로 남는다 */ }
+}
+
 function resetSession() {
   state.user = null; state.me = null; state.daily = null;
   state.cards = []; state.images = []; state.notices = [];
   state.hearted = new Set(); state.sentRequests = [];
+  state.flipped = new Set(); state.flippedDate = null;
+  try { sessionStorage.removeItem(FLIP_KEY); } catch { /* 지우지 못해도 화면은 동작한다 */ }
 }
 
 function setToken(token) { state.token = token || null; token ? sessionStorage.setItem(STORAGE_KEY, token) : sessionStorage.removeItem(STORAGE_KEY); }
@@ -86,9 +104,25 @@ function signup() { return layout(`<section class="auth"><div class="auth-title"
 function options(values, selected, labels = {}) { return `<option value="" ${selected ? '' : 'selected'} disabled>선택</option>${values.map(value => `<option value="${value}" ${selected === value ? 'selected' : ''}>${labels[value] || value}</option>`).join('')}`; }
 function profile() { const p = state.me?.profile || {}; const preference = state.me?.preference || {}; return layout(`<section class="profile-page"><div><p class="eyebrow">MY PROFILE</p><h1>나를 소개해<br>주세요.</h1><p>프로필과 선호 조건을 저장하면 오늘의 추천을 열 수 있어요.</p></div><form id="profile-form" class="form-card profile-form"><h2>내 프로필</h2><label>이름<input name="displayName" value="${escapeHtml(p.displayName || '')}" required></label><div class="two-cols"><label>생년월일<input name="birthDate" type="date" value="${String(p.birthDate || '').slice(0, 10)}" required></label><label>성별<select name="gender" required>${options(['MALE','FEMALE','OTHER'], p.gender, { MALE: '남성', FEMALE: '여성', OTHER: '기타' })}</select></label></div><label>지역 코드<input name="regionCode" value="${escapeHtml(p.regionCode || 'SEOUL_MAPO')}" required></label><div class="two-cols"><label>키(cm)<input name="heightCm" type="number" min="100" max="250" value="${escapeHtml(p.heightCm || '')}" required></label><label>직업<select name="jobCategory">${options(['STUDENT','OFFICE_WORKER','FREELANCER','SELF_EMPLOYED','OTHER'], p.jobCategory)}</select></label></div><label>MBTI<input name="mbti" maxlength="4" value="${escapeHtml(p.mbti || '')}" placeholder="ENFP" required></label><label>한 줄 소개<textarea name="intro" maxlength="200">${escapeHtml(p.intro || '')}</textarea></label><hr><h2>선호 조건</h2><div class="two-cols"><label>관심 성별<select name="preferredGender">${options(['MALE','FEMALE','OTHER'], preference.preferredGender)}</select></label><label>최소 나이<input name="minAge" type="number" min="19" max="99" value="${preference.minAge || 20}" required></label></div><div class="two-cols"><label>최대 나이<input name="maxAge" type="number" min="19" max="99" value="${preference.maxAge || 35}" required></label><label>추천 지역<input name="regionScope" value="${escapeHtml((preference.regionScope || ['SEOUL_MAPO']).join(','))}" required></label></div><p class="form-error" aria-live="polite"></p><button class="button" type="submit">프로필과 선호 조건 저장</button></form></section>`, 'mypage'); }
 function fortuneBanner(daily) { const ticket = daily.refreshTicket || {}; return `<section class="fortune-card"><div><p class="eyebrow">${escapeHtml(daily.serviceDate || '')} · TODAY'S FORTUNE</p><h2>${escapeHtml(daily.fortune?.grade || 'GOOD')} <span>${daily.fortune?.score ?? '-'}점</span></h2><p>${escapeHtml(daily.fortune?.message || '오늘의 인연을 만나 보세요.')}</p></div><div class="ticket"><strong>새로고침권</strong><b>${ticket.status === 'AVAILABLE' ? '사용 가능' : ticket.status === 'USED' ? '사용 완료' : '미지급'}</b><small>${ticket.expiresAt ? `${displayDate(ticket.expiresAt)}까지` : '매일 오전 8시 갱신'}</small><button id="refresh-button" class="outline-button" ${ticket.status !== 'AVAILABLE' ? 'disabled' : ''}>새 카드 보기</button></div></section>`; }
-function home() { const name = state.me?.profile?.displayName || state.user?.email?.split('@')[0] || '가궁이'; return layout(`<section class="home-wide"><div class="home-title"><div><p class="eyebrow">FOR YOU</p><h1>${escapeHtml(name)}님을 위한<br>오늘의 연결</h1></div><a href="#/mypage" class="text-link">마이페이지 →</a></div><div id="daily-area"><div class="loading">오늘의 운세를 여는 중이에요…</div></div><section><div class="section-title"><div><p class="eyebrow">RECOMMENDATIONS</p><h2>오늘의 추천 카드</h2></div><span id="card-count" class="muted"></span></div><div id="recommendations" class="profile-grid"><div class="loading">추천을 불러오는 중이에요…</div></div></section></section>`, 'home'); }
+function home() { const name = state.me?.profile?.displayName || state.user?.email?.split('@')[0] || '가궁이'; return layout(`<section class="home-wide"><div class="home-title"><div><p class="eyebrow">FOR YOU</p><h1>${escapeHtml(name)}님을 위한<br>오늘의 연결</h1></div><a href="#/mypage" class="text-link">마이페이지 →</a></div><div id="daily-area"><div class="loading">오늘의 운세를 여는 중이에요…</div></div><section><div class="section-title"><div><p class="eyebrow">RECOMMENDATIONS</p><h2>오늘의 추천 카드</h2></div><span id="card-count" class="muted"></span></div><div id="recommendations" class="tarot-grid"><div class="loading">추천을 불러오는 중이에요…</div></div></section></section>`, 'home'); }
 function cardAvatar(card, large = false) { const image = ['AI_PUBLIC', 'BLURRED_PUBLIC'].includes(card.publicImage?.type) && typeof card.publicImage.url === 'string' && /^https?:\/\//i.test(card.publicImage.url) ? card.publicImage.url : null; const color = ['peach', 'mint', 'lilac', 'sky'].includes(card.color) ? card.color : ''; return `<div class="person-image ${color} ${large ? 'large' : ''}">${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(card.displayName)}의 공개 프로필" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'placeholder-icon',textContent:'✦'}))">` : '<span class="placeholder-icon" aria-label="이미지 준비 중">✦</span>'}<span class="image-label">${image ? card.publicImage.type === 'BLURRED_PUBLIC' ? '흐림 프로필' : 'AI 프로필' : '이미지 준비 중'}</span></div>`; }
-function card(card) { const hearted = state.hearted.has(card.userId); const requested = state.sentRequests.some(item => item.targetUserId === card.userId); return `<article class="person-card">${cardAvatar(card)}<div class="person-info"><div class="card-name"><h3>${escapeHtml(card.displayName)} <small>${card.age}</small></h3>${card.badges?.includes('POPULAR') ? '<span class="badge">인기</span>' : ''}</div><p class="district">⌖ ${escapeHtml(card.regionLabel || '')} · ${card.heightCm || '-'}cm</p><p class="meta">${escapeHtml(card.jobCategory || '')} · ${escapeHtml(card.mbti || '')} · ${escapeHtml(card.animalFace || '')}</p><p class="reason">${escapeHtml(card.recommendReason || '오늘의 추천 조건에 맞아요.')}</p><div class="card-actions"><button class="outline-button heart-button" data-heart="${card.userId}">${hearted ? '♥ 하트 취소' : '♡ 하트'}</button><a class="small-button" href="#/cards/${card.userId}">상세</a></div>${requested ? '<small class="sent-state">채팅 요청 보냄</small>' : ''}</div></article>`; }
+/**
+ * 추천 카드는 뒷면으로 깔리고 눌러야 뒤집힌다. 매일 8시에 오늘의 카드를 연다는 서비스를
+ * 화면에서도 그대로 보이게 한다. 뒷면은 button 이라 키보드로도 뒤집힌다.
+ *
+ * 앞면은 뒤집기 전에도 DOM 에 있다. 가리는 장치가 아니라 연출이다. 실제로 감춰야 하는
+ * 원본 사진은 애초에 응답에 들어오지 않는다(D-01).
+ */
+function card(card) {
+  const hearted = state.hearted.has(card.userId);
+  const requested = state.sentRequests.some(item => item.targetUserId === card.userId);
+  const open = state.flipped.has(card.userId);
+  const face = `${cardAvatar(card)}<div class="person-info"><div class="card-name"><h3>${escapeHtml(card.displayName)} <small>${card.age}</small></h3>${card.badges?.includes('POPULAR') ? '<span class="badge">인기</span>' : ''}</div><p class="district">⌖ ${escapeHtml(card.regionLabel || '')} · ${card.heightCm || '-'}cm</p><p class="meta">${escapeHtml(card.jobCategory || '')} · ${escapeHtml(card.mbti || '')} · ${escapeHtml(card.animalFace || '')}</p><p class="reason">${escapeHtml(card.recommendReason || '오늘의 추천 조건에 맞아요.')}</p><div class="card-actions"><button class="outline-button heart-button" data-heart="${card.userId}">${hearted ? '♥ 하트 취소' : '♡ 하트'}</button><a class="small-button" href="#/cards/${card.userId}">상세</a></div>${requested ? '<small class="sent-state">채팅 요청 보냄</small>' : ''}</div>`;
+  return `<article class="tarot${open ? ' flipped' : ''}"><div class="tarot-inner">`
+    + `<button type="button" class="tarot-back" data-flip="${card.userId}" aria-label="오늘의 카드 뒤집기"${open ? ' tabindex="-1" aria-hidden="true"' : ''}><span class="tarot-mark">✦</span><span class="tarot-hint">눌러서 뒤집기</span></button>`
+    + `<div class="tarot-face" aria-hidden="${open ? 'false' : 'true'}">${face}</div>`
+    + `</div></article>`;
+}
 // 추천 목록을 거치지 않고 바로 들어오거나 새로고침하면 state.cards 가 비어 있다.
 // 예전에는 그때 목업 인물을 보여줬다. 없는 사람을 진짜처럼 보여주면 안 되므로 서버에서 받는다.
 function cardDetail() { return layout('<section class="page"><a class="back" href="#/home">← 추천으로 돌아가기</a><div id="card-detail" class="loading">불러오는 중…</div></section>', 'home'); }
@@ -112,10 +146,22 @@ function admin() { return layout(`<section class="page admin-page"><div class="s
 
 async function loadMe() { try { state.me = await api.me(); state.user = { ...state.user, id: state.me.id, email: state.me.email, role: state.me.role }; } catch (error) { if (error.status === 401) { setToken(null); resetSession(); } else throw error; } }
 function completeLogin(result) { resetSession(); setToken(result.token); state.user = result.user; location.hash = result.user.role === 'ADMIN' ? '#/admin' : '#/home'; }
-function bindCardActions() { document.querySelectorAll('[data-heart]').forEach(button => button.onclick = () => toggleHeart(button.dataset.heart, button)); }
+function bindCardActions() {
+  document.querySelectorAll('[data-heart]').forEach(button => button.onclick = () => toggleHeart(button.dataset.heart, button));
+  document.querySelectorAll('[data-flip]').forEach(button => button.onclick = () => {
+    const tarot = button.closest('.tarot');
+    if (!tarot) return;
+    tarot.classList.add('flipped');
+    tarot.querySelector('.tarot-face')?.setAttribute('aria-hidden', 'false');
+    // 뒤집힌 뒤에는 뒷면이 보이지 않는다. 탭 순서와 읽기 순서에서 빼 둔다.
+    button.setAttribute('tabindex', '-1');
+    button.setAttribute('aria-hidden', 'true');
+    rememberFlip(button.dataset.flip);
+  });
+}
 async function toggleHeart(userId, button) { const removing = state.hearted.has(userId); button.disabled = true; try { await api.heart(userId, removing); removing ? state.hearted.delete(userId) : state.hearted.add(userId); button.textContent = removing ? '♡ 하트' : '♥ 하트 취소'; showNotice(removing ? '하트를 취소했어요.' : '하트를 보냈어요.'); } catch (error) { showNotice(error.message, 'error'); } finally { button.disabled = false; } }
 async function refreshCards() { const button = document.querySelector('#refresh-button'); button.disabled = true; try { const refreshed = await api.refresh(); state.cards = refreshed.cards || []; state.daily.refreshTicket = { ...state.daily.refreshTicket, ...refreshed.refreshTicket }; document.querySelector('#recommendations').innerHTML = state.cards.length ? state.cards.map(card).join('') : '<div class="empty-state">새 추천 후보가 없어요. 새로고침권은 사용되지 않았어요.</div>'; document.querySelector('#daily-area').innerHTML = fortuneBanner(state.daily); bindCardActions(); document.querySelector('#refresh-button')?.addEventListener('click', refreshCards); showNotice('새 추천 카드를 불러왔어요.'); } catch (error) { showNotice(error.message, 'error'); button.disabled = false; } }
-async function loadHome() { const dailySlot = document.querySelector('#daily-area'); const cardSlot = document.querySelector('#recommendations'); try { const opened = await api.openDaily(); state.daily = opened; state.cards = opened.cards || []; dailySlot.innerHTML = fortuneBanner(opened); const list = await api.recommendations(); state.cards = list.cards || state.cards; state.hearted = new Set(list.heartedUserIds || state.hearted); cardSlot.innerHTML = state.cards.length ? state.cards.map(card).join('') : '<div class="empty-state">오늘은 새 추천이 없어요. 내일 오전 8시에 다시 열려요.</div>'; document.querySelector('#card-count').textContent = `${state.cards.length}명`; bindCardActions(); document.querySelector('#refresh-button')?.addEventListener('click', refreshCards); } catch (error) { renderError(error, dailySlot); renderError(error, cardSlot); if (error.status === 401) location.hash = '#/login'; } }
+async function loadHome() { const dailySlot = document.querySelector('#daily-area'); const cardSlot = document.querySelector('#recommendations'); try { const opened = await api.openDaily(); state.daily = opened; state.cards = opened.cards || []; dailySlot.innerHTML = fortuneBanner(opened); const list = await api.recommendations(); state.cards = list.cards || state.cards; state.hearted = new Set(list.heartedUserIds || state.hearted); loadFlipped(list.serviceDate || opened.serviceDate); cardSlot.innerHTML = state.cards.length ? state.cards.map(card).join('') : '<div class="empty-state">오늘은 새 추천이 없어요. 내일 오전 8시에 다시 열려요.</div>'; document.querySelector('#card-count').textContent = `${state.cards.length}명`; bindCardActions(); document.querySelector('#refresh-button')?.addEventListener('click', refreshCards); } catch (error) { renderError(error, dailySlot); renderError(error, cardSlot); if (error.status === 401) location.hash = '#/login'; } }
 function openRequestComposer(userId) { document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="request-modal"><form id="request-form" class="request-modal"><button type="button" class="modal-close" aria-label="닫기">×</button><p class="eyebrow">CHAT REQUEST</p><h2>채팅 요청 보내기</h2><label>짧은 메시지<textarea name="message" maxlength="300" placeholder="안녕하세요, 이야기를 나눠 보고 싶어요." required></textarea></label><p class="form-error" aria-live="polite"></p><button class="button" type="submit">요청 보내기</button></form></div>`); const modal = document.querySelector('#request-modal'); modal.querySelector('.modal-close').onclick = () => modal.remove(); modal.onclick = event => { if (event.target === modal) modal.remove(); }; modal.querySelector('#request-form').onsubmit = async event => { event.preventDefault(); const form = event.currentTarget; try { await api.sendChatRequest(userId, new FormData(form).get('message')); state.sentRequests.push({ targetUserId: userId }); modal.remove(); showNotice('채팅 요청을 보냈어요.'); } catch (error) { form.querySelector('.form-error').textContent = error.message; } }; }
 /** 보낸 요청의 상태를 버튼 하나로 보여준다. 무시는 서버가 PENDING 으로 가려 주므로 그대로 쓴다. */
 const requestButton = (status, id) => ({
