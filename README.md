@@ -89,6 +89,7 @@ kkagung/
 | [03 API 명세](docs/03_API_명세서.md) · [04 ERD](docs/04_ERD_및_테이블정의.md) | 계약과 데이터 |
 | [05 NCP 아키텍처](docs/05_NCP_아키텍처.md) · [07 배포 절차](docs/07_NCP_배포_절차.md) | 어떻게 올리는가 |
 | [06 결정사항](docs/06_결정사항_및_작업배분.md) | 왜 그렇게 정했는가 |
+| [08 시연 시나리오](docs/08_시연_시나리오.md) | 무엇을 어떤 순서로 보여주는가 |
 | [SECURITY_OPERATIONS](docs/SECURITY_OPERATIONS.md) | 보안·운영 기준 |
 
 ## 설계에서 신경 쓴 것
