@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
+import sharp from "sharp";
 import { PrismaClient } from "@prisma/client";
+import { deleteObject, privateBucket, publicBucket, putObject, storageReady } from "../src/lib/objectStorage.js";
 const prisma = new PrismaClient();
 
 type Gender = "MALE" | "FEMALE";
@@ -64,11 +66,36 @@ const accounts: SeedAccount[] = [
 ];
 
 // object key 에는 이름·이메일·원래 파일명을 넣지 않고 가짜 식별자만 쓴다.
+// AI 는 PENDING 으로 둔다(D-02). 실제 사용자가 올렸을 때와 같은 상태다.
+// 시드만 DONE 으로 두면 구현하지 않은 AI 변환이 동작하는 것처럼 보이고, 카드에
+// 흐림본 대신 선명한 사진이 나가 "수락 전에는 흐림만 공개" 라는 규칙과 어긋난다.
 const imageRows = (seedNo: number) => [
-  { imageType: "ORIGINAL_PRIVATE" as const, objectKey: `originals/seed-${seedNo}-1.webp` },
-  { imageType: "AI_PUBLIC" as const, objectKey: `profiles/ai/seed-${seedNo}-1.webp` },
-  { imageType: "BLURRED_PUBLIC" as const, objectKey: `profiles/blurred/seed-${seedNo}-1.webp` },
+  { imageType: "ORIGINAL_PRIVATE" as const, objectKey: `originals/seed-${seedNo}-1.webp`, status: "DONE" as const },
+  { imageType: "BLURRED_PUBLIC" as const, objectKey: `profiles/blurred/seed-${seedNo}-1.webp`, status: "DONE" as const },
+  { imageType: "AI_PUBLIC" as const, objectKey: "", status: "PENDING" as const },
 ];
+
+/**
+ * 시드 계정의 자리 표시 사진. 사람 사진이 아니라 색이 다른 단색 도형이라 구분만 된다.
+ * 행만 만들고 객체를 올리지 않으면 추천 카드가 전부 깨진 이미지로 뜬다.
+ */
+const placeholder = (seedNo: number, blur: boolean) => {
+  const hue = (seedNo * 47) % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">`
+    + `<rect width="1024" height="1024" fill="hsl(${hue} 55% 78%)"/>`
+    + `<circle cx="512" cy="420" r="190" fill="hsl(${hue} 45% 58%)"/>`
+    + `<rect x="232" y="690" width="560" height="320" rx="160" fill="hsl(${hue} 45% 58%)"/></svg>`;
+  const image = sharp(Buffer.from(svg));
+  return (blur ? image.blur(28) : image).webp({ quality: 80 }).toBuffer();
+};
+
+/** 저장소가 설정된 환경에서만 올린다. 설정이 없으면 행만 두고 넘어간다. */
+const seedImageObject = async (imageType: string, objectKey: string, seedNo: number) => {
+  if (!storageReady()) return;
+  const isOriginal = imageType === "ORIGINAL_PRIVATE";
+  const body = await placeholder(seedNo, imageType === "BLURRED_PUBLIC");
+  await putObject(isOriginal ? privateBucket() : publicBucket(), objectKey, body, "image/webp");
+};
 
 async function main() {
   const passwordHash = await bcrypt.hash(process.env.SEED_PASSWORD ?? "kkagung123!", 12);
@@ -126,13 +153,29 @@ async function main() {
     });
 
     for (const row of imageRows(p.seedNo)) {
+      // 다시 돌릴 때 앞선 시드가 올려 둔 객체가 남을 수 있다. 특히 AI 는 예전에 DONE 으로
+      // 시드해 객체까지 올렸는데 지금은 PENDING + 빈 키라, 지우지 않으면 아무도 참조하지
+      // 않는 객체가 공개 버킷에 남는다. 그 키가 공개 읽기로 열려 있으므로 치운다.
+      const before = await prisma.profileImage.findUnique({
+        where: { userId_slot_imageType: { userId: user.id, slot: 1, imageType: row.imageType } },
+        select: { objectKey: true },
+      });
+      if (storageReady() && before !== null && before.objectKey !== "" && before.objectKey !== row.objectKey) {
+        const bucket = row.imageType === "ORIGINAL_PRIVATE" ? privateBucket() : publicBucket();
+        // 지우지 못해도 시드는 계속한다. 남은 객체는 수명 주기 정책으로 정리한다.
+        try { await deleteObject(bucket, before.objectKey); } catch { /* 계속 */ }
+      }
+
+      // 올릴 객체가 없는 행(AI PENDING)은 건너뛴다.
+      if (row.objectKey !== "") await seedImageObject(row.imageType, row.objectKey, p.seedNo);
+      const pending = row.status === "PENDING";
       const imageData = {
         objectKey: row.objectKey,
-        generationStatus: "DONE" as const,
-        byteSize: 120000,
-        width: 1024,
-        height: 1024,
-        processedAt: now,
+        generationStatus: row.status,
+        byteSize: pending ? 0 : 120000,
+        width: pending ? 0 : 1024,
+        height: pending ? 0 : 1024,
+        processedAt: pending ? null : now,
         failedReasonCode: null,
       };
       await prisma.profileImage.upsert({
@@ -144,6 +187,7 @@ async function main() {
   }
 
   console.log(`Seed complete: 계정 ${accounts.length}개`);
+  if (!storageReady()) console.log("  저장소 설정이 없어 사진 객체는 올리지 않았다. 카드는 자리 표시로 보인다.");
   for (const account of accounts) console.log(`  - ${account.email}`);
 }
 

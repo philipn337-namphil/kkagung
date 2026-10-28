@@ -30,14 +30,19 @@ flowchart TB
 
 | 영역 | 구성 | 접근 규칙 |
 |---|---|---|
-| Public Subnet | Load Balancer, 인터넷 구간 | HTTPS만 수신 |
+| Public Subnet | Load Balancer, 인터넷 구간 | HTTP 80 수신. 도메인을 확보하지 못해 인증서를 붙이지 않았다(07 참고) |
+| Public Subnet | NAT Gateway 전용 | 앱 서브넷의 아웃바운드 경로 |
 | Private App Subnet | 웹·API·Auto Scaling 서버 | LB와 운영 경로만 접근 |
 | Private DB Subnet | Cloud DB for MySQL | App Server ACG만 MySQL 포트 허용 |
 | Object Storage | 원본 사진·공개 변환 이미지 | 서버 권한 검증 뒤 URL 발급 |
 | NAS | 관리자 검수·운영 자료 | 운영자·승인 서버만 접근 |
 
-- ACG는 LB → 앱의 HTTP/HTTPS, 앱 → DB의 MySQL 포트만 허용한다.
-- NACL은 Subnet 단위로 불필요한 인·아웃바운드를 차단한다.
+- ACG는 LB → 앱의 8080(API)과 5173(프론트), 앱 → DB의 MySQL 포트만 허용한다.
+- 앱 서버에는 API 컨테이너와 프론트 컨테이너가 함께 뜬다. LB가 경로로 나눠 보낸다(`/api/*`는 8080, 나머지는 5173).
+- 앱 ACG의 아웃바운드도 열어야 한다. Container Registry와 Object Storage가 공인 주소라, 막히면 서버가 기동하지 못한다.
+- 차단은 ACG가 수행한다. NACL은 기본값(규칙 0개 = 전체 허용)으로 두었다.
+  NACL은 stateless라 임시 포트까지 양방향으로 관리해야 하고 ACG와 역할이 겹친다.
+  운영 전환 시 다층 방어가 필요하면 그때 추가한다. 자세한 사유는 `07_NCP_배포_절차.md`.
 - 원본은 Private Object Storage에 저장하고 수락 전 Object Key·URL을 클라이언트에 전달하지 않는다.
 
 ## 서버·배포

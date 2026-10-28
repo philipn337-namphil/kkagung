@@ -100,7 +100,7 @@ describe("GET /api/v1/cards/:targetUserId", () => {
     expect(Object.keys(detail.body.data).sort()).toEqual(["card", "chatRequestStatus", "hearted"]);
     expect(detail.body.data.card.userId).toBe(targetId);
     expect(Object.keys(detail.body.data.card).sort()).toEqual([
-      "age", "animalFace", "badges", "displayName", "gender", "heightCm",
+      "age", "animalFace", "badges", "gender", "heightCm",
       "jobCategory", "mbti", "publicImage", "recommendReason", "regionLabel", "userId",
     ]);
     for (const forbidden of ["email", "@kkagung.local", "birthDate", "objectKey", "object_key", "password", "ORIGINAL_PRIVATE", "intro"]) {

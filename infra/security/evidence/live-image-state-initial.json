@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-10-27T00:44:50.829Z",
+  "mode": "real HTTP/MySQL, actual image processing, Moto S3 simulation",
+  "passed": [
+    "owner gets normalized original through 60-second signed URL; stranger cannot delete it",
+    "concurrent uploads cannot exceed three photos or duplicate a slot [IMG-01]",
+    "active relationship baseline is visible and third party cannot read messages",
+    "SUSPENDED: old token denied; peer recommendations, hearts and rooms exclude account; new messages denied",
+    "WITHDRAWN: old token denied; peer recommendations, hearts and rooms exclude account; new messages denied",
+    "real withdrawal revokes used token and blocks other token from new photo URL issuance"
+  ],
+  "failed": [],
+  "failureKinds": {},
+  "observations": {
+    "concurrentUploads": {
+      "statuses": [
+        202,
+        500
+      ],
+      "originalCount": 3,
+      "slot3OriginalCount": 1
+    }
+  },
+  "cloudPolicyVerified": false,
+  "signatureExpiryVerified": false
+}

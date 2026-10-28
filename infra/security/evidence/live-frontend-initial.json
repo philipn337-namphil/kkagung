@@ -1,0 +1,72 @@
+{
+  "recordedAt": "2026-10-27T06:47:58.778Z",
+  "mode": "unchanged frontend API client/renderers in VM with minimal DOM; real HTTP/MySQL/Sharp/Moto",
+  "browserRenderingVerified": false,
+  "passed": [
+    "real seed-account login and me through frontend client",
+    "daily and recommendations render from real API",
+    "heart created and received through frontend client",
+    "received request accepts into a real room through frontend client",
+    "message roundtrip and XSS escaping with actual API response",
+    "public card omits original object keys and signed original URLs",
+    "accepted-room original URLs reach the actual storage fixture",
+    "admin dashboard maps actual count response into metric values",
+    "USER admin API forbidden without mock substitution",
+    "block denies fresh message and photo URL; DB receives no new message",
+    "logout revokes token on real backend",
+    "functional integration never receives a mock-eligible 501",
+    "HTTP 401 stays an error and never becomes mock data",
+    "HTTP 403 stays an error and never becomes mock data",
+    "HTTP 404 stays an error and never becomes mock data",
+    "HTTP 409 stays an error and never becomes mock data",
+    "HTTP 429 stays an error and never becomes mock data",
+    "actual frontend handler serves only public assets and correct API configuration"
+  ],
+  "failed": [
+    {
+      "name": "accepted-room frontend visibly renders authorized original image",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "image status renderer recognizes DONE publicUrl from real response",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "chat restriction disables frontend send form",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": false,
+      "expected": true
+    },
+    {
+      "name": "logout clears previous user recommendations and mock interaction cache",
+      "owner": "frontend",
+      "kind": "ERR_ASSERTION",
+      "actual": 3,
+      "expected": 0
+    }
+  ],
+  "observations": {
+    "adminTopLevelFields": [
+      "cardViews",
+      "chatRequests",
+      "chatRoomsCreated",
+      "fortuneOpens",
+      "hearts",
+      "refreshInventory",
+      "reportsPending",
+      "serviceDate",
+      "signups"
+    ],
+    "liveRequests": 41,
+    "mockEligibleLiveResponses": 0,
+    "browserStopMarkerReceived": true
+  },
+  "cloudVerified": false
+}

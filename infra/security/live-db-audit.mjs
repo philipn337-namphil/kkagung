@@ -36,6 +36,14 @@ try {
     assert.equal(response.status, 200); return (await response.json()).data.token;
   };
   const adminToken = await tokenFor(admin), userToken = await tokenFor(user);
+  await test('untrusted X-Forwarded-For cannot satisfy admin network allowlist', async () => {
+    const previous = process.env.ADMIN_ALLOWED_IP_CIDRS;
+    process.env.ADMIN_ALLOWED_IP_CIDRS = '198.51.100.7';
+    try {
+      const response = await fetch(base + '/admin/settings', { headers: { Authorization: `Bearer ${adminToken}`, 'X-Forwarded-For': '198.51.100.7' } });
+      assert.equal(response.status, 403);
+    } finally { if (previous === undefined) delete process.env.ADMIN_ALLOWED_IP_CIDRS; else process.env.ADMIN_ALLOWED_IP_CIDRS = previous; }
+  });
   const first = { popularMinUniqueHearts: 21, popularMinUniqueChatRequests: 8, windowDays: 14 };
   const second = { popularMinUniqueHearts: 22, popularMinUniqueChatRequests: 9, windowDays: 15 };
   await test('current DB USER cannot change admin settings: 403', async () =>

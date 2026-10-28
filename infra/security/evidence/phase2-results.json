@@ -1,23 +1,28 @@
 {
-  "baselineCommit": "072053246c2481528fa8b6c56f90df0473a4cf8c",
-  "recordedAt": "2026-10-25T23:15:27.539Z",
+  "baselineCommit": "7ceb55e0210e32185d2360baa2e034984fca5313",
+  "recordedAt": "2026-10-27T06:02:57.749Z",
   "node": "v24.22.1",
   "mode": "real HTTP routes, mock Prisma; no live DB/storage",
   "sourceHashes": {
-    "backend/src/config.ts": "6a9fcda308a8ebf35e47304210d05cea627c0e2e0c1e6d831ee027d554554cfc",
-    "backend/src/middleware/auth.ts": "9a6ba42f0626a8ae9ea8461c5be5c3089eaf2a495293ec4fb27faf948d65cbcc",
-    "backend/src/routes/auth.ts": "acf909d6d40c9a3f2439b5c2287d442d30c20e32eec5e5c0a5aa87237ff9b14f",
-    "backend/src/routes/me.ts": "fd08feb8ef5c28cdb61242cc3c40ea69559763965e6289232f7f45eb226f6a0c",
-    "backend/src/app.ts": "6e76f80b31c8ffbbf716e2b9460d8a5d2abfed08ec1fed6fb2faced183072ddc",
-    "frontend/app.js": "96c1249a87ee4c6f454c44b4a6e634dcb0d8208255a91543de55f0febebecc8f",
-    "frontend/server.js": "06b81f7395333a1da9307b9a46e98a8dfce9988d10bd80b62ccbce84a0d7f0b7",
+    "backend/src/config.ts": "6a0a20947785233fedc5b8d98866ce8d7a9b24193f31109aade907b03ad6db46",
+    "backend/src/middleware/auth.ts": "d2e89f34482429d44069c647cabce83ec9dd63183c22731a8d50f532cd724a13",
+    "backend/src/routes/auth.ts": "05a2b3b2543b52a0d49c62a018fed0f2dd564a0c3d848038e07471e75b94c41a",
+    "backend/src/routes/me.ts": "e7f1ac06e5d066b73edc30cb7f01b2916b2a15c2fda631845d51a788488be0ec",
+    "backend/src/app.ts": "bd9f9157e2342c12f4dbea5a27a74a7b561341c70aa3aaaa2e0bb752db8f337c",
+    "frontend/app.js": "e09e6a74c073dd3432c65b1b4855b1eff65a4c4b44b32a6fcc1fc30533f35d49",
+    "frontend/server.js": "f8070932c732a4f19c0f6d1cf36982723a21459a6a53d90c30b22ce3e7209a38",
     "backend/src/lib/tokenHash.ts": "3c493c74a3b56412085e164795662a8b0775997b5554297e8128e227ca5f3439",
-    "backend/src/middleware/rateLimit.ts": "f904a80097e4c68115a8151cbc65cc301a61aebfd9b3760c05827c3865cbe1fb",
-    "backend/prisma/schema.prisma": "f62bd49e2540ace82b87617f6b2c155a23e20427f6ae0bb4edb10321214984ea",
+    "backend/src/middleware/rateLimit.ts": "73940c346809eb98c44b5ae3dad7183470f927b20c6a690e0213efe0def320e2",
+    "backend/prisma/schema.prisma": "e3e14e5d48a614a7a5c7de775fe458331aaa4adede3e107fc1fe722502aa4019",
     "backend/prisma/migrations/2026102501_security_token_and_rate_limits/migration.sql": "0a1af2390c19a36cb48600b0b5fda08459b6c1d41754575641cf533037ec7d65",
-    "infra/security/tests/phase2.test.ts": "31936286c6ba266715304da20fa52843bdf71540f6b06be69a4e958663620dda",
-    "infra/security/tests/frontend-config.test.ts": "81b7e56ed85d42421beff837064d2804e9d6497c89dcd6cdba3af39b9837d8d6",
-    "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab"
+    "infra/security/tests/phase2.test.ts": "8389c98d150a23d6585caa3d7f8a24d8df31ee1854e1a8d9ce3b4ccf2d4fe2eb",
+    "infra/security/tests/frontend-config.test.ts": "16716719b6ee2d85c7cd40614c707366b947d86b44a2a40ab9fbf5cbedf435be",
+    "infra/security/tests/production-auth.test.ts": "4ab1179bb8f0640bb3d8023858ef4afba25f813744239bda83fd5b9a8d1937ab",
+    "infra/security/tests/upload-processing.test.ts": "2f9bdfdeba990486e8136c35189fe494ac664792a742e24ce02f125f5229e825",
+    "backend/src/lib/imageProcessing.ts": "bd0e0672f5a547c5954175e5aaf8c6350256ad4adb26c4b4d92bc94b526765e5",
+    "backend/src/lib/objectStorage.ts": "7f3f5dd5aa5d85f838d1429ad81ba774e5cc3704ecf50cdc567eec88568f494a",
+    "backend/src/routes/images.ts": "14c2ca5f6e3a6ab1f2326dfc89678e5912accd17f7e0c665be9ddf8561a4cc8e",
+    "backend/src/routes/chatRooms.ts": "8ae9c06303ff868b6f5dc9525c0f7b5965e2cc7ee70ca4470edcc7bad680bb9e"
   },
   "build": {
     "exitCode": 0,
@@ -25,10 +30,10 @@
   },
   "tests": {
     "exitCode": 0,
-    "passed": 73,
+    "passed": 84,
     "failed": 0,
-    "pending": 4,
-    "total": 77,
+    "pending": 1,
+    "total": 85,
     "cases": [
       {
         "name": "frontend static file exposure (real server handler, loopback only) normal static page remains available",
@@ -311,18 +316,6 @@
         "status": "passed"
       },
       {
-        "name": "Phase 2 integration gates: implementation/infrastructure required private original photo denied before acceptance and allowed only to participants",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required disguised extension, invalid MIME, oversize and excessive pixels rejected; EXIF removed",
-        "status": "skipped"
-      },
-      {
-        "name": "Phase 2 integration gates: implementation/infrastructure required recommendation/heart/chat ownership, sanction and withdrawal restrictions enforced",
-        "status": "skipped"
-      },
-      {
         "name": "Phase 2 integration gates: implementation/infrastructure required isolated DB/object/NAS restore meets measured RPO and RTO",
         "status": "skipped"
       },
@@ -336,6 +329,50 @@
       },
       {
         "name": "production registration refuses client-only adult verification without creating a user",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only accepts real jpeg and normalizes to private JPEG plus public blurred WebP",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only accepts real png and normalizes to private JPEG plus public blurred WebP",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only accepts real webp and normalizes to private JPEG plus public blurred WebP",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects HTML or text disguised as an image",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects real GIF bytes",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects empty files",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects more than 10 MiB before attempting image decode",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects highly compressed image over 20 million pixels even below byte limit",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only strips EXIF and embedded metadata from both stored variants while applying orientation",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only rejects truncated image payload",
+        "status": "passed"
+      },
+      {
+        "name": "actual image byte validation; synthetic fixtures only generates distinct private and public namespaces with unpredictable keys",
         "status": "passed"
       }
     ]

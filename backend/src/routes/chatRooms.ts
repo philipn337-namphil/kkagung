@@ -7,6 +7,7 @@ import { buildPublicCards, serviceDateOf } from "../lib/recommendation.js";
 import { fail, ok } from "../lib/response.js";
 import { prisma } from "../prisma.js";
 import { blockedIdsFor, decodeCursor, encodeCursor, parseLimit } from "./hearts.js";
+import { privateObjectUrl, storageReady } from "../lib/objectStorage.js";
 
 const UNAVAILABLE_STATUS = ["SUSPENDED", "WITHDRAWN"] as const;
 const PREVIEW_LENGTH = 60;
@@ -14,21 +15,22 @@ const PREVIEW_LENGTH = 60;
 const messageSchema = z.object({ body: z.string().min(1).max(1000), clientMessageId: z.string().min(1).max(64).optional() });
 
 type Membership =
-  | { ok: true; roomId: bigint; createdAt: Date; partnerId: bigint; lastReadMessageId: bigint | null }
+  | { ok: true; roomId: bigint; createdAt: Date; partnerId: bigint; lastReadMessageId: bigint | null; requestAccepted: boolean }
   | { ok: false; code: "CHAT_ROOM_NOT_FOUND" | "NOT_ROOM_MEMBER" };
 
 const loadMembership = async (roomIdRaw: string, userId: bigint): Promise<Membership> => {
   if (!/^\d+$/.test(roomIdRaw)) return { ok: false, code: "CHAT_ROOM_NOT_FOUND" };
   const room = await prisma.chatRoom.findUnique({
     where: { id: BigInt(roomIdRaw) },
-    select: { id: true, createdAt: true, members: { select: { userId: true, lastReadMessageId: true } } },
+    select: { id: true, createdAt: true, chatRequest: { select: { status: true } }, members: { select: { userId: true, lastReadMessageId: true } } },
   });
   if (!room) return { ok: false, code: "CHAT_ROOM_NOT_FOUND" };
   const mine = room.members.find((member) => member.userId === userId);
   if (!mine) return { ok: false, code: "NOT_ROOM_MEMBER" };
   const partner = room.members.find((member) => member.userId !== userId);
   if (!partner) return { ok: false, code: "CHAT_ROOM_NOT_FOUND" };
-  return { ok: true, roomId: room.id, createdAt: room.createdAt, partnerId: partner.userId, lastReadMessageId: mine.lastReadMessageId };
+  return { ok: true, roomId: room.id, createdAt: room.createdAt, partnerId: partner.userId, lastReadMessageId: mine.lastReadMessageId,
+    requestAccepted: room.chatRequest.status === "ACCEPTED" };
 };
 
 const membershipFailure = (res: Response, code: "CHAT_ROOM_NOT_FOUND" | "NOT_ROOM_MEMBER") =>
@@ -73,7 +75,8 @@ chatRoomsRouter.get("/", requireAuth, async (req, res, next) => {
     const hasMore = rows.length > limit;
 
     const serviceDate = serviceDateOf(new Date());
-    const cards = await buildPublicCards(userId, serviceDate, page.map((row) => ({ targetUserId: row.partnerId, reasonCode: "CHAT_PARTNER" })));
+    // 수락된 방이므로 이름을 함께 준다. 수락 전 목록에는 이름이 나가지 않는다.
+    const cards = await buildPublicCards(userId, serviceDate, page.map((row) => ({ targetUserId: row.partnerId, reasonCode: "CHAT_PARTNER" })), { withName: true });
     const cardByUserId = new Map(cards.map((card) => [card.userId, card]));
 
     const items = [];
@@ -104,6 +107,7 @@ chatRoomsRouter.get("/:roomId", requireAuth, async (req, res, next) => {
     const userId = req.auth!.userId;
     const membership = await loadMembership(String(req.params.roomId), userId);
     if (!membership.ok) return membershipFailure(res, membership.code);
+    if (!membership.requestAccepted) return membershipFailure(res, "CHAT_ROOM_NOT_FOUND");
 
     const [me, partner] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { status: true } }),
@@ -125,9 +129,20 @@ chatRoomsRouter.get("/:roomId", requireAuth, async (req, res, next) => {
     const meRestricted = (UNAVAILABLE_STATUS as readonly string[]).includes(me.status) || me.status === "CHAT_RESTRICTED";
     const canSendMessage = !blockedByMe && !blockedByPartner && !partnerUnavailable && !meRestricted;
 
-    // 원본 사진은 서명 URL 로만 내보낼 수 있다. 서명 설정이 없으면 빈 배열로 둔다.
-    // object key 는 어떤 경우에도 응답에 넣지 않는다.
+    // 수락된 방의 참여자에게만, 현재 차단·계정 상태를 다시 확인한 뒤 발급한다.
+    // 메시지 제한(CHAT_RESTRICTED)은 기존 사진 열람 권한과 별개다.
+    const canRevealOriginals = !blockedByMe && !blockedByPartner && !partnerUnavailable
+      && !(UNAVAILABLE_STATUS as readonly string[]).includes(me.status);
     const originalImages: { imageId: string; url: string; expiresAt: Date }[] = [];
+    if (canRevealOriginals && storageReady()) {
+      const photos = await prisma.profileImage.findMany({
+        where: { userId: membership.partnerId, imageType: "ORIGINAL_PRIVATE", generationStatus: "DONE", objectKey: { not: "" } },
+        orderBy: [{ slot: "asc" }, { id: "asc" }], take: 3, select: { id: true, objectKey: true },
+      });
+      for (const photo of photos) originalImages.push({
+        imageId: photo.id.toString(), url: await privateObjectUrl(photo.objectKey, 60), expiresAt: new Date(Date.now() + 60_000),
+      });
+    }
 
     res.setHeader("Cache-Control", "no-store");
     return ok(res, {
@@ -148,7 +163,7 @@ chatRoomsRouter.get("/:roomId", requireAuth, async (req, res, next) => {
         tattooStatus: partner.profile.tattooStatus,
         militaryService: partner.profile.militaryService,
         celebrityLookalike: partner.profile.celebrityLookalike,
-        originalImages: canSendMessage ? originalImages : [],
+        originalImages,
       },
       canSendMessage,
       blockedByMe,

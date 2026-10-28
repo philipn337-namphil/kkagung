@@ -39,7 +39,7 @@ const prisma = {
   chatRequest: {
     findUnique: async () => ({ id: 11n, senderId: 2n, receiverId: 1n, status: 'PENDING' }),
   },
-  chatRoom: { findUnique: async ({ where }) => where.id === 301n ? { id: 301n, createdAt: now, members: [{ userId: 1n, lastReadMessageId: null }, { userId: 2n, lastReadMessageId: null }] } : null },
+  chatRoom: { findUnique: async ({ where }) => where.id === 301n ? { id: 301n, createdAt: now, chatRequest: { status: 'ACCEPTED' }, members: [{ userId: 1n, lastReadMessageId: null }, { userId: 2n, lastReadMessageId: null }] } : null },
   chatMessage: {
     findUnique: async () => null,
     findFirst: async () => null,
@@ -77,6 +77,7 @@ function load(path) {
   const module = { exports: {} };
   cache.set(path, module.exports);
   const resolveImport = name => {
+    if (name === '../lib/objectStorage.js') return { storageReady: () => false, privateObjectUrl: async () => { throw new Error('Storage disabled in route-only fixture'); } };
     if (name === '../middleware/auth.js') return { requireAuth: (req, _res, next) => { req.auth = { userId: state.actor, role: 'USER' }; next(); } };
     if (name === '../prisma.js') return { prisma };
     if (name === '../lib/response.js') return response;

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import {
-  CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client,
+  CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -61,8 +61,36 @@ const client = () => {
   return cached;
 };
 
+/**
+ * 객체를 올린다. 공개 권한은 호출부가 고르지 않고 버킷으로 정해진다.
+ *
+ * NCP 에서 버킷의 "공개"는 목록 공개일 뿐이고 객체는 기본이 private 이다. 브라우저가 흐림본을
+ * 직접 받으려면 올릴 때 public-read 를 함께 보내야 한다. 빠뜨리면 공개 버킷인데도 403 이다.
+ * 반대로 원본에 이 권한이 붙으면 수락 전 신원 노출을 막는 경계가 무너진다(D-01).
+ *
+ * 둘 다 호출부에서 실수하기 쉬운 선택이라 여기서 버킷을 보고 결정한다.
+ */
 export const putObject = async (bucket: string, key: string, body: Buffer, contentType: string) => {
-  await client().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
+  const isPublic = bucket !== "" && bucket === publicBucket();
+  await client().send(new PutObjectCommand({
+    Bucket: bucket, Key: key, Body: body, ContentType: contentType,
+    ACL: isPublic ? "public-read" : undefined,
+  }));
+};
+
+/**
+ * 접두사로 객체 키를 모아 돌려준다. DB 가 참조하지 않는 객체가 남지 않았는지 확인할 때 쓴다.
+ * 목록은 한 번에 다 오지 않을 수 있어 continuation token 을 따라간다.
+ */
+export const listObjects = async (bucket: string, prefix: string) => {
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const page = await client().send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+    for (const item of page.Contents ?? []) if (item.Key) keys.push(item.Key);
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return keys;
 };
 
 export const deleteObject = async (bucket: string, key: string) => {

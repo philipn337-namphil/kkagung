@@ -29,7 +29,8 @@ const reasonText = (code: string) => REASON[code as ReasonCode] ?? REASON.PREFER
 
 export type PublicCard = {
   userId: string;
-  displayName: string;
+  /** 수락된 관계에서만 채운다. 수락 전 카드에는 이 키 자체가 없다. */
+  displayName?: string;
   age: number;
   gender: string;
   regionLabel: string;
@@ -40,6 +41,19 @@ export type PublicCard = {
   badges: string[];
   publicImage: { url: string; type: string } | null;
   recommendReason: string;
+};
+
+/**
+ * 나이 조건을 생년월일 범위로 바꾼다. 나이를 행마다 계산하면 인덱스를 쓸 수 없다.
+ * ageOn 과 같은 기준(서비스 날짜 당일 생일이면 그 나이)을 유지해야 결과가 달라지지 않는다.
+ */
+const birthDateRange = (serviceDate: string, minAge: number, maxAge: number): [Date, Date] => {
+  const [year, month, day] = serviceDate.split("-").map(Number);
+  // 나이가 minAge 이상 = 서비스 날짜에서 minAge 년 전 같은 날까지 태어난 사람(당일 생일 포함).
+  const latest = new Date(Date.UTC(year - minAge, month - 1, day));
+  // 나이가 maxAge 이하 = maxAge + 1 년 전 같은 날의 다음 날부터 태어난 사람.
+  const earliest = new Date(Date.UTC(year - maxAge - 1, month - 1, day + 1));
+  return [earliest, latest];
 };
 
 const ageOn = (birthDate: Date, serviceDate: string) => {
@@ -55,8 +69,6 @@ const orderKey = (viewerId: bigint, serviceDate: string, targetId: bigint) =>
   createHash("sha256").update(`${viewerId}:${serviceDate}:${targetId}`).digest("hex");
 
 const matchesOptional = (value: string | null, wanted: string | null) => wanted === null || wanted === ANY || value === wanted;
-
-type Candidate = { id: bigint; profile: NonNullable<Awaited<ReturnType<typeof loadViewer>>>["profile"]; preference: NonNullable<Awaited<ReturnType<typeof loadViewer>>>["preference"] };
 
 const loadViewer = (userId: bigint) =>
   prisma.user.findUnique({ where: { id: userId }, select: { id: true, profile: true, preference: true } });
@@ -86,31 +98,45 @@ const pickTargets = async (viewerId: bigint, serviceDate: string, recommendation
   const anyRegion = regionScope.length === 0 || regionScope.includes(ANY);
   const excluded = await excludedIds(viewerId, recommendationDate);
 
-  const candidates = (await prisma.user.findMany({
+  // 완화하지 않는 조건은 DB 에서 거른다. 예전에는 조건에 맞는 전 사용자를 메모리로 올린 뒤
+  // JS 로 걸렀는데, 8시에 사용자마다 그 스캔이 한 번씩 일어나 응답이 초 단위로 늘어났다.
+  // 성별·나이·지역은 user_profiles(gender, region_code, birth_date) 인덱스로 좁힐 수 있다.
+  const [minBirth, maxBirth] = birthDateRange(serviceDate, preference.minAge, preference.maxAge);
+  const hardMatched = await prisma.user.findMany({
     where: {
-      id: { not: viewerId },
+      id: excluded.size > 0
+        ? { not: viewerId, notIn: [...excluded].map((id) => BigInt(id)) }
+        : { not: viewerId },
       status: { in: [...RECOMMENDABLE_STATUS] },
-      profile: { isNot: null },
-      preference: { isNot: null },
+      profile: {
+        is: {
+          profileCompletedAt: { not: null },
+          gender: preference.preferredGender,
+          birthDate: { gte: minBirth, lte: maxBirth },
+          ...(anyRegion ? {} : { regionCode: { in: regionScope } }),
+        },
+      },
+      // 상대도 나를 원해야 한다. 한쪽 조건만 보면 서로 맞지 않는 카드가 섞인다.
+      preference: {
+        is: {
+          preferredGender: viewer.profile.gender,
+          minAge: { lte: viewerAge },
+          maxAge: { gte: viewerAge },
+        },
+      },
       // 공개할 이미지가 준비된 사람만 후보로 삼는다.
       profileImages: { some: { imageType: { in: ["AI_PUBLIC", "BLURRED_PUBLIC"] }, generationStatus: "DONE" } },
     },
-    select: { id: true, profile: true, preference: true },
-  })) as Candidate[];
-
-  // 성별·나이 상호 조건, 지역, 차단, 정지·탈퇴·추천 제외는 완화하지 않는 조건이다.
-  const hardMatched = candidates.filter((candidate) => {
-    const profile = candidate.profile!;
-    const theirPreference = candidate.preference!;
-    if (excluded.has(candidate.id.toString())) return false;
-    if (profile.profileCompletedAt === null) return false;
-    if (preference.preferredGender !== profile.gender) return false;
-    if (theirPreference.preferredGender !== viewer.profile!.gender) return false;
-    const targetAge = ageOn(profile.birthDate, serviceDate);
-    if (targetAge < preference.minAge || targetAge > preference.maxAge) return false;
-    if (viewerAge < theirPreference.minAge || viewerAge > theirPreference.maxAge) return false;
-    if (!anyRegion && !regionScope.includes(profile.regionCode)) return false;
-    return true;
+    // 완화 대상인 선택 조건만 아래에서 보므로 그 필드만 가져온다.
+    select: {
+      id: true,
+      profile: {
+        select: {
+          energyType: true, smokingStatus: true, tattooStatus: true,
+          militaryService: true, animalFace: true, heightCm: true,
+        },
+      },
+    },
   });
 
   // 선택 조건은 후보가 부족할 때 완화한다.
@@ -125,7 +151,7 @@ const pickTargets = async (viewerId: bigint, serviceDate: string, recommendation
     return true;
   });
 
-  const byOrderKey = (left: Candidate, right: Candidate) =>
+  const byOrderKey = (left: { id: bigint }, right: { id: bigint }) =>
     orderKey(viewerId, serviceDate, left.id).localeCompare(orderKey(viewerId, serviceDate, right.id));
 
   const picked: { id: bigint; reasonCode: ReasonCode }[] = strictMatched
@@ -160,7 +186,16 @@ const publicImageUrl = (chosen: { imageType: string; objectKey: string }) => {
 };
 
 // 하트·채팅 목록도 같은 공개 카드 모양을 쓴다. 변환을 한 곳에만 두기 위해 내보낸다.
-export const buildPublicCards = async (viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[]) => {
+/**
+ * 공개 카드에는 이름을 넣지 않는다. 수락 전에는 상대가 누구인지 알 수 없어야 한다.
+ * 카드에서 사람을 가리키는 것은 지역과 동물상이다.
+ *
+ * withName 은 이미 수락된 관계에만 쓴다. 채팅방 목록이 그렇다. 그 밖에서는 켜지 않는다.
+ */
+export const buildPublicCards = async (
+  viewerId: bigint, serviceDate: string, items: { targetUserId: bigint; reasonCode: string }[],
+  { withName = false }: { withName?: boolean } = {},
+) => {
   if (items.length === 0) return [];
   const excluded = new Set<string>();
   const blocks = await prisma.block.findMany({
@@ -192,7 +227,7 @@ export const buildPublicCards = async (viewerId: bigint, serviceDate: string, it
     if (chosenImage === null) continue;
     cards.push({
       userId: target.id.toString(),
-      displayName: target.profile.displayName,
+      ...(withName ? { displayName: target.profile.displayName } : {}),
       age: ageOn(target.profile.birthDate, serviceDate),
       gender: target.profile.gender,
       regionLabel: target.profile.regionCode,

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-27",
+  "timezone": "Asia/Seoul",
+  "mode": "manual IAB observations; isolated loopback HTTP and synthetic users only",
+  "checks": {
+    "realNineSeedAccountsVisible": true,
+    "loginDailyRecommendations": true,
+    "heartReceivedBySecondAccount": true,
+    "requestReceivedAndAcceptedBySecondAccount": true,
+    "messageSentAndReadByOtherParticipant": true,
+    "blockRemovesRoomFromList": true,
+    "blockedPeerNewMessageRejectedVisibly": true,
+    "doneImagesIncorrectlyLabeledPreparing": true,
+    "previousAccountNoticeVisibleAfterAccountSwitch": true,
+    "acceptedRoomHasPrivacyNoticeButNoOriginalImageRendering": true
+  },
+  "screenshotsOutsideRepository": [
+    "phase2-frontend-flow-20261027.png",
+    "phase2-frontend-image-status-20261027.png"
+  ],
+  "notVerifiedInBrowser": ["390px layout", "all form XSS execution cases", "production NCP"],
+  "testTabsClosed": true
+}
