@@ -589,6 +589,28 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 
 ---
 
+## 제출물 묶기
+
+`git archive` 로 만든다. 추적되는 파일만 들어가므로 `.env`·`node_modules`·`dist`·
+부하 테스트 토큰 파일이 자동으로 빠진다. 작업 트리에 남은 임시 파일도 섞이지 않는다.
+
+```bash
+git switch main && git pull
+git archive --format=zip -o kkagung.zip HEAD
+```
+
+묶기 전에 `develop` 을 `main` 으로 올렸는지 확인한다. 채점자가 보는 것은 `main` 이다.
+
+### 묶은 뒤 확인
+
+```bash
+# 비밀값·사진·덤프가 섞이지 않았는지
+unzip -l kkagung.zip | grep -iE ".env$|node_modules|/dist/|tokens.*json|dump"
+
+# 받은 사람이 바로 띄울 수 있는지 (README 의 빠른 실행과 같은 경로)
+unzip -l kkagung.zip | grep -E "README.md|infra/docker-compose.yml|.env.example"
+```
+
 ## 배포 점검표
 
 - [ ] `TRUST_PROXY` 를 지정했는가 (빠뜨리면 전원 429)
@@ -599,6 +621,7 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 - [ ] `JWT_SECRET` 이 이미지·저장소·로그에 남지 않는가
 - [ ] 원본 버킷이 비공개인가
 - [ ] 두 버킷 모두 전체 공개가 **"공개 안함"** 인가 (버킷 공개 = 목록 공개다)
+- [ ] 제출 전 `develop` 을 `main` 으로 올렸는가
 - [ ] 사진을 한 장 올려, 흐림본은 익명으로 열리고 원본은 403 인지 확인했는가
 - [ ] 앱 서브넷에 NAT Gateway 경로가 있고, DB 서브넷에는 없는가
 - [ ] `kkagung-acg-app` 의 **아웃바운드**가 열려 있는가 (비면 `docker pull` 이 타임아웃난다)
