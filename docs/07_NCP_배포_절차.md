@@ -423,7 +423,13 @@ Private Endpoint     ...kr.private-ncr.ntruss.com   ← Classic 전용. VPC 에�
 
 #### HTTPS 를 쓰지 않는다
 
-도메인을 확보하지 못했고, 인증서는 도메인 없이 붙일 수 없다. LB 리스너를 HTTP 로 둔다.
+도메인을 사지 않기로 했고, 인증서는 도메인 없이 붙일 수 없다. LB 리스너를 HTTP 로 둔다.
+
+무료 DDNS 로 이름을 받아 Let's Encrypt 인증서까지 붙이는 길은 있다. 택하지 않은 이유는 두
+가지다. DuckDNS 류는 이름을 **IP** 에 묶는데 LB 의 IP 는 우리가 보장받는 값이 아니라 바뀌면
+끊긴다. 그리고 `FRONTEND_URL` 이 CORS Origin 을 하나만 받으므로(`backend/src/app.ts`)
+주소가 바뀔 때마다 Init Script 를 고쳐 서버를 다시 만들어야 한다. 제출 일정 안에서는
+얻는 것보다 깨질 자리가 많다고 봤다.
 
 코드는 손댈 것이 없다. https 강제, secure 쿠키, HSTS 가 모두 없고 `FRONTEND_URL` 에
 스킴 검증도 없다. 토큰은 쿠키가 아니라 `sessionStorage` 에 둔다.
