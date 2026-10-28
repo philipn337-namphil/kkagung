@@ -72,6 +72,10 @@ const api = {
   uploadImage(file, slot) { const form = new FormData(); form.append('file', file); if (slot) form.append('slot', String(slot)); return request('/me/images', { method: 'POST', body: form }); },
   deleteImage: imageId => request(`/me/images/${imageId}`, { method: 'DELETE' }),
   admin: path => request(`/admin/${path}`),
+  sanction: (userId, status, reason) => request(`/admin/users/${userId}/sanction`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),
+  handleReport: (reportId, status, resultNote) => request(`/admin/reports/${reportId}`, { method: 'PATCH', body: JSON.stringify({ status, resultNote }) }),
+  saveBadge: payload => request('/admin/settings/badge', { method: 'PUT', body: JSON.stringify(payload) }),
+  saveDailyRefresh: nextTotal => request('/admin/settings/daily-refresh', { method: 'PUT', body: JSON.stringify({ nextTotal }) }),
   withdraw: () => request('/me', { method: 'DELETE' }),
 };
 
@@ -104,7 +108,7 @@ function chats() { return layout(`<section class="page"><div class="section-titl
 function chatRoom() { return layout(`<section class="chat-page"><a class="back" href="#/chats">← 채팅 목록</a><div id="chat-header" class="chat-header loading">채팅방을 불러오는 중이에요…</div><div id="messages" class="messages"><div class="loading">메시지를 불러오는 중이에요…</div></div><form id="message-form" class="message-form"><input name="content" maxlength="1000" placeholder="메시지를 입력하세요" required><button class="button">보내기</button></form></section>`, 'chats'); }
 function mypage() { return layout(`<section class="page"><div class="section-title"><div><p class="eyebrow">MY PAGE</p><h1>내 설정</h1></div><a class="text-link" href="#/profile">프로필 수정 →</a></div><article class="setting-card"><h2>내 사진</h2><p>최대 3장까지 올릴 수 있습니다. JPG·PNG·WEBP, 10MB 이하.</p><p class="form-error" id="photo-error" aria-live="polite"></p><div id="photo-slots" class="profile-grid"><p class="loading">확인 중…</p></div><p class="privacy-note">추천 카드에는 흐림 처리된 사진만 나갑니다. 원본은 상대가 채팅 요청을 수락한 뒤에만 공개됩니다.</p></article><div class="settings-grid" style="margin-top:14px"><article class="setting-card"><h2>차단 및 신고</h2><p>차단한 사용자는 추천과 상호작용에서 제외됩니다.</p><a class="outline-button" href="#/blocks">차단 목록 보기</a></article><article class="setting-card"><h2>계정</h2><p>${escapeHtml(state.user?.email || '')}</p><span class="source-pill">${escapeHtml(state.user?.role || 'USER')}</span><p class="form-error" id="withdraw-error" aria-live="polite"></p><button class="outline-button" id="withdraw">회원 탈퇴</button><span class="privacy-note">탈퇴하면 추천과 채팅에서 즉시 제외되고 다시 로그인할 수 없습니다.</span></article></div></section>`, 'mypage'); }
 function blocks() { return layout(`<section class="page"><a class="back" href="#/mypage">← 마이페이지</a><p class="eyebrow">SAFETY</p><h1>차단 목록</h1><div class="empty-state">차단한 사용자가 없습니다.</div></section>`, 'mypage'); }
-function admin() { return layout(`<section class="page admin-page"><div class="section-title"><div><p class="eyebrow">ADMIN</p><h1>운영 대시보드</h1></div><span class="admin-notice">관리자 API는 현재 권한을 서버에서 다시 검증합니다.</span></div><div id="admin-dashboard" class="metric-grid"><div class="loading">운영 지표를 불러오는 중이에요…</div></div><div class="admin-columns"><section class="setting-card"><h2>사용자 관리</h2><div id="admin-users" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>신고 관리</h2><div id="admin-reports" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>운영 설정</h2><div id="admin-settings" class="loading">불러오는 중…</div></section></div></section>`, 'admin'); }
+function admin() { return layout(`<section class="page admin-page"><div class="section-title"><div><p class="eyebrow">ADMIN</p><h1>운영 대시보드</h1></div><span class="admin-notice">관리자 API는 현재 권한을 서버에서 다시 검증합니다.</span></div><div id="admin-dashboard" class="metric-grid"><div class="loading">운영 지표를 불러오는 중이에요…</div></div><div class="admin-columns"><section class="setting-card"><h2>사용자 관리</h2><p class="form-error" id="admin-users-error" aria-live="polite"></p><div id="admin-users" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>신고 관리</h2><p class="form-error" id="admin-reports-error" aria-live="polite"></p><div id="admin-reports" class="loading">불러오는 중…</div></section><section class="setting-card"><h2>운영 설정</h2><p class="form-error" id="admin-settings-error" aria-live="polite"></p><div id="admin-settings" class="loading">불러오는 중…</div></section></div></section>`, 'admin'); }
 
 async function loadMe() { try { state.me = await api.me(); state.user = { ...state.user, id: state.me.id, email: state.me.email, role: state.me.role }; } catch (error) { if (error.status === 401) { setToken(null); resetSession(); } else throw error; } }
 function completeLogin(result) { resetSession(); setToken(result.token); state.user = result.user; location.hash = result.user.role === 'ADMIN' ? '#/admin' : '#/home'; }
@@ -273,7 +277,115 @@ function bindPhotoSlots() {
     } catch (error) { report(error.message); button.disabled = false; }
   });
 }
-async function loadAdmin() { const slots = { dashboard: document.querySelector('#admin-dashboard'), users: document.querySelector('#admin-users'), reports: document.querySelector('#admin-reports'), settings: document.querySelector('#admin-settings') }; try { const [dashboard, users, reports, settings] = await Promise.all([api.admin('dashboard'), api.admin('users'), api.admin('reports'), api.admin('settings')]); slots.dashboard.innerHTML = [['가입', dashboard.signups], ['운세 열람', dashboard.fortuneOpens], ['하트', dashboard.hearts], ['채팅 요청', dashboard.chatRequests], ['대기 신고', dashboard.reportsPending], ['새로고침 잔여', dashboard.refreshInventory?.remaining]].map(([label, value]) => `<article class="metric"><span>${label}</span><b>${value ?? '-'}</b></article>`).join(''); slots.users.innerHTML = (users.items || []).map(user => `<div class="admin-row"><b>${escapeHtml(user.displayName || user.email)}</b><span>${escapeHtml(user.status)}</span><button class="outline-button" data-report-user="${user.userId}">신고</button></div>`).join('') || '<p class="muted">사용자가 없습니다.</p>'; slots.reports.innerHTML = (reports.items || []).map(report => `<div class="admin-row"><b>${escapeHtml(report.reasonCode)}</b><span>${escapeHtml(report.status)}</span><small>${escapeHtml(report.detail || '')}</small></div>`).join('') || '<p class="muted">대기 신고가 없습니다.</p>'; slots.settings.innerHTML = `<p>인기 배지: 하트 ${settings.badge?.popularMinUniqueHearts ?? '-'} · 요청 ${settings.badge?.popularMinUniqueChatRequests ?? '-'}</p><p>다음 날 새로고침권: ${settings.dailyRefresh?.nextTotal ?? '-'}개</p>`; document.querySelectorAll('[data-report-user]').forEach(button => button.onclick = () => api.report({ targetType: 'USER', targetId: button.dataset.reportUser, reasonCode: 'OTHER', detail: '관리자 화면 목업 신고' }).then(() => showNotice('신고가 접수되었습니다.')).catch(error => showNotice(error.message, 'error'))); } catch (error) { Object.values(slots).forEach(slot => renderError(error, slot)); if (error.status === 403) showNotice('관리자 권한이 필요합니다.', 'error'); } }
+// 제재 단계. 탈퇴(WITHDRAWN)는 서버가 받지 않는 값이라 넣지 않는다.
+const SANCTIONS = [['ACTIVE', '정상'], ['RECOMMENDATION_BLOCKED', '추천 제외'], ['CHAT_RESTRICTED', '채팅 제한'], ['SUSPENDED', '정지']];
+const REPORT_STATES = [['REVIEWING', '검토 중'], ['RESOLVED', '조치 완료'], ['DISMISSED', '반려']];
+
+const optionsFor = (pairs, selected) => pairs
+  .map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
+
+/**
+ * 관리자 동작은 되돌리기 어렵고 감사 로그가 남는다. 실패하면 왜 실패했는지 그 자리에서
+ * 보여주고, 성공하면 목록을 다시 받아 화면을 지금 상태와 맞춘다.
+ */
+const runAdminAction = async (button, errorSlot, action) => {
+  if (errorSlot) errorSlot.textContent = '';
+  button.disabled = true;
+  try {
+    await action();
+    await loadAdmin();
+  } catch (error) {
+    if (errorSlot) errorSlot.textContent = error.message;
+    button.disabled = false;
+  }
+};
+
+async function loadAdmin() {
+  const slots = {
+    dashboard: document.querySelector('#admin-dashboard'),
+    users: document.querySelector('#admin-users'),
+    reports: document.querySelector('#admin-reports'),
+    settings: document.querySelector('#admin-settings'),
+  };
+  const errors = {
+    users: document.querySelector('#admin-users-error'),
+    reports: document.querySelector('#admin-reports-error'),
+    settings: document.querySelector('#admin-settings-error'),
+  };
+  try {
+    const [dashboard, users, reports, settings] = await Promise.all([
+      api.admin('dashboard'), api.admin('users'), api.admin('reports'), api.admin('settings'),
+    ]);
+
+    slots.dashboard.innerHTML = [['가입', dashboard.signups], ['운세 열람', dashboard.fortuneOpens], ['하트', dashboard.hearts], ['채팅 요청', dashboard.chatRequests], ['대기 신고', dashboard.reportsPending], ['새로고침 잔여', dashboard.refreshInventory?.remaining]]
+      .map(([label, value]) => `<article class="metric"><span>${label}</span><b>${value ?? '-'}</b></article>`).join('');
+
+    // 탈퇴한 계정은 더 바꿀 상태가 없다. 조작 자리를 아예 두지 않는다.
+    slots.users.innerHTML = (users.items || []).map(user => {
+      const reportTag = user.reportCount ? ` · 신고 ${user.reportCount}` : '';
+      const head = `<b>${escapeHtml(user.displayName || user.email)}</b><span>${escapeHtml(user.status)}${reportTag}</span>`;
+      if (user.status === 'WITHDRAWN') return `<div class="admin-row">${head}</div>`;
+      return `<div class="admin-row">${head}<select data-sanction-status="${escapeHtml(user.userId)}" aria-label="제재 단계">${optionsFor(SANCTIONS, user.status)}</select><input data-sanction-reason="${escapeHtml(user.userId)}" maxlength="200" placeholder="사유" aria-label="제재 사유"><button class="outline-button" data-sanction="${escapeHtml(user.userId)}">적용</button></div>`;
+    }).join('') || '<p class="muted">사용자가 없습니다.</p>';
+
+    slots.reports.innerHTML = (reports.items || []).map(report => `<div class="admin-row"><b>${escapeHtml(report.reasonCode)}</b><span>${escapeHtml(report.status)}</span><small>${escapeHtml(report.detail || '')}</small><select data-report-status="${escapeHtml(report.reportId)}" aria-label="처리 상태">${optionsFor(REPORT_STATES, report.status)}</select><input data-report-note="${escapeHtml(report.reportId)}" maxlength="500" placeholder="처리 메모" aria-label="처리 메모" value="${escapeHtml(report.resultNote || '')}"><button class="outline-button" data-report="${escapeHtml(report.reportId)}">적용</button></div>`).join('')
+      || '<p class="muted">대기 신고가 없습니다.</p>';
+
+    const badge = settings.badge || {};
+    const refresh = settings.dailyRefresh || {};
+    slots.settings.innerHTML = `<form class="admin-form" id="refresh-form"><p class="muted">오늘 ${escapeHtml(String(refresh.currentServiceDate ?? '-'))} · 총 ${refresh.currentTotal ?? '-'}개 중 ${refresh.currentRemaining ?? '-'}개 남음</p><label>다음 날(${escapeHtml(String(refresh.nextServiceDate ?? '-'))}) 새로고침권<input name="nextTotal" type="number" min="0" max="10000" value="${refresh.nextTotal ?? 0}" required></label><button class="outline-button">저장</button></form>`
+      + `<form class="admin-form" id="badge-form"><label>인기 배지 · 하트<input name="popularMinUniqueHearts" type="number" min="1" max="1000" value="${badge.popularMinUniqueHearts ?? 1}" required></label><label>인기 배지 · 채팅 요청<input name="popularMinUniqueChatRequests" type="number" min="1" max="1000" value="${badge.popularMinUniqueChatRequests ?? 1}" required></label><label>집계 기간(일)<input name="windowDays" type="number" min="7" max="90" value="${badge.windowDays ?? 7}" required></label><button class="outline-button">저장</button></form>`;
+
+    document.querySelectorAll('[data-sanction]').forEach(button => button.onclick = () => {
+      const id = button.dataset.sanction;
+      const status = document.querySelector(`[data-sanction-status="${id}"]`).value;
+      const reason = document.querySelector(`[data-sanction-reason="${id}"]`).value.trim();
+      // 서버가 사유를 필수로 받는다. 비어 있으면 보내기 전에 알려 준다.
+      if (reason === '') { errors.users.textContent = '제재 사유를 적어 주세요.'; return; }
+      runAdminAction(button, errors.users, async () => {
+        await api.sanction(id, status, reason);
+        showNotice('제재 상태를 바꿨어요.');
+      });
+    });
+
+    document.querySelectorAll('[data-report]').forEach(button => button.onclick = () => {
+      const id = button.dataset.report;
+      const status = document.querySelector(`[data-report-status="${id}"]`).value;
+      const note = document.querySelector(`[data-report-note="${id}"]`).value.trim();
+      if (note === '') { errors.reports.textContent = '처리 메모를 적어 주세요.'; return; }
+      runAdminAction(button, errors.reports, async () => {
+        await api.handleReport(id, status, note);
+        showNotice('신고를 처리했어요.');
+      });
+    });
+
+    document.querySelector('#refresh-form').onsubmit = event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      runAdminAction(form.querySelector('button'), errors.settings, async () => {
+        await api.saveDailyRefresh(Number(new FormData(form).get('nextTotal')));
+        showNotice('다음 날 새로고침권 수를 바꿨어요.');
+      });
+    };
+
+    document.querySelector('#badge-form').onsubmit = event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      runAdminAction(form.querySelector('button'), errors.settings, async () => {
+        await api.saveBadge({
+          popularMinUniqueHearts: Number(data.get('popularMinUniqueHearts')),
+          popularMinUniqueChatRequests: Number(data.get('popularMinUniqueChatRequests')),
+          windowDays: Number(data.get('windowDays')),
+        });
+        showNotice('인기 배지 기준을 바꿨어요.');
+      });
+    };
+  } catch (error) {
+    Object.values(slots).forEach(slot => renderError(error, slot));
+    if (error.status === 403) showNotice('관리자 권한이 필요합니다.', 'error');
+  }
+}
 
 function bind(route) {
   document.querySelector('#logout')?.addEventListener('click', async () => { try { await api.logout(); setToken(null); resetSession(); location.hash = '#/'; } catch (error) { showNotice(error.message, 'error'); } });
