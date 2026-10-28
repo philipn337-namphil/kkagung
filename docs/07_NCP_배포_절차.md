@@ -650,8 +650,27 @@ NCP 에서는 DB 가 분리되고 서버가 늘어나므로 이 값보다 나아
 `부하NNNN` 으로 채워져 시연용 사람들이 묻힌다.
 
 ```
-5단계 측정 끝  →  seed-load.mjs --clean  →  seed-demo.mjs  →  확인
+5단계 측정 끝  →  run-load.mjs --reset  →  seed-load.mjs --clean  →  seed-demo.mjs  →  확인
 ```
+
+**`--reset` 을 빠뜨리면 새로고침권이 소진된 채로 시연하게 된다.** 부하 계정이 그날 재고를
+다 가져갔는데, `--clean` 은 `user.deleteMany` 만 하고 `daily_refresh_inventory` 를
+건드리지 않는다. 시연 시드도 재고를 참조하지 않는다. 관리자 화면의 "새로고침권 수 변경"
+으로도 못 고친다 — **당일 재고는 다시 채우지 않고 다음 서비스 날짜부터 적용**되게 막아
+두었다(선착순 풀을 당일에 관리자가 늘리지 못하게 한 것이다).
+
+```bash
+# --clean 보다 먼저. --users 는 만들어 둔 부하 계정 수만큼 준다.
+docker run --rm -v "$PWD/loadtest:/app/loadtest"   -e DATABASE_URL="$DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" -e ALLOW_REMOTE_LOAD_SEED=true   <이미지> node loadtest/run-load.mjs --export loadtest/reset.json --users 2000 --reset
+rm -f loadtest/reset.json   # 살아 있는 토큰이 들어 있다
+```
+
+`--users` 기본값이 500 이라 그대로 두면 500명분만 비워지고, 재고는 남은 티켓 수로 다시
+세므로 나머지가 발급된 상태로 남는다. `--export` 는 재고만 되돌리고 부하는 돌리지 않으려는
+것이다. 돌린 뒤 관리자 대시보드에서 `remaining` 이 `total` 과 같은지 본다.
+
+> 날짜가 바뀌면 저절로 풀린다. 다음 서비스 날짜에는 `ensureInventory` 가 재고 행을 새로
+> 만든다. 측정과 시연이 **같은 날**일 때만 생기는 문제다.
 
 스크립트는 앱 이미지에 들어 있지 않다. 돌고 있는 컨테이너에 넣어 `docker exec` 로 실행한다.
 그러면 컨테이너의 `DATABASE_URL`·`OBJECT_STORAGE_*` 를 그대로 물려받는다.
