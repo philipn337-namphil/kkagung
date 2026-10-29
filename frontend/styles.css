@@ -63,3 +63,10 @@
 /* 업로드 중에는 자리 전체를 잠근다. */
 .photo-slot.is-busy{opacity:.55;pointer-events:none}
 @media(max-width:800px){.photo-slot-hint{font-size:12px}}
+
+/* 채팅 입력창이 공개 사진·소개에 밀려 화면 밖으로 나가던 것. 화면 아래에 붙여 둔다. */
+.message-form{position:sticky;bottom:0;z-index:3;box-shadow:0 -6px 18px rgba(24,33,30,.06)}
+.messages{max-height:48vh}
+/* 차단 목록은 사진이 없으므로 두 칸으로 */
+.list-card.block-row{grid-template-columns:1fr auto}
+.list-card.block-row .outline-button{width:auto;margin:0;padding:8px 12px}
